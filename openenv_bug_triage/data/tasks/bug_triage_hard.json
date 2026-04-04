@@ -1,0 +1,711 @@
+{
+  "task_id": "bug_triage_hard",
+  "step_budget": 120,
+  "available_teams": [
+    "backend-api",
+    "frontend-web",
+    "mobile-ios",
+    "mobile-android",
+    "infrastructure",
+    "data-platform"
+  ],
+  "available_components": [
+    "api-gateway",
+    "auth-service",
+    "user-service",
+    "payment-service",
+    "web-app",
+    "ios-app",
+    "android-app",
+    "database",
+    "cache",
+    "cdn"
+  ],
+  "tickets": [
+    {
+      "ticket_id": "BUG-3001",
+      "title": "api-gateway incident pattern 1",
+      "description": "Observed issue in api affecting user workflows. Signal quality is high and triage is required.",
+      "reporter_type": "user",
+      "service": "api",
+      "component_candidates": [
+        "api-gateway",
+        "auth-service",
+        "payment-service"
+      ],
+      "created_at": "2024-03-01T09:00:00",
+      "customer_tier": "enterprise",
+      "repro_steps_present": true,
+      "logs_present": true,
+      "attachments_count": 1,
+      "suspected_duplicate_ids": []
+    },
+    {
+      "ticket_id": "BUG-3002",
+      "title": "auth-service incident pattern 2",
+      "description": "Observed issue in auth affecting user workflows. Signal quality is high and triage is required.",
+      "reporter_type": "qa",
+      "service": "auth",
+      "component_candidates": [
+        "auth-service",
+        "user-service",
+        "web-app"
+      ],
+      "created_at": "2024-03-01T09:13:00",
+      "customer_tier": "pro",
+      "repro_steps_present": true,
+      "logs_present": false,
+      "attachments_count": 2,
+      "suspected_duplicate_ids": []
+    },
+    {
+      "ticket_id": "BUG-3003",
+      "title": "user-service incident pattern 3",
+      "description": "Observed issue in identity affecting user workflows. Signal quality is low and triage is required.",
+      "reporter_type": "monitoring",
+      "service": "identity",
+      "component_candidates": [
+        "user-service",
+        "payment-service",
+        "ios-app"
+      ],
+      "created_at": "2024-03-01T09:26:00",
+      "customer_tier": "free",
+      "repro_steps_present": false,
+      "logs_present": true,
+      "attachments_count": 3,
+      "suspected_duplicate_ids": []
+    },
+    {
+      "ticket_id": "BUG-3004",
+      "title": "payment-service incident pattern 4",
+      "description": "Observed issue in payments affecting user workflows. Signal quality is high and triage is required.",
+      "reporter_type": "user",
+      "service": "payments",
+      "component_candidates": [
+        "payment-service",
+        "web-app",
+        "android-app"
+      ],
+      "created_at": "2024-03-01T09:39:00",
+      "customer_tier": "enterprise",
+      "repro_steps_present": true,
+      "logs_present": true,
+      "attachments_count": 4,
+      "suspected_duplicate_ids": []
+    },
+    {
+      "ticket_id": "BUG-3005",
+      "title": "web-app incident pattern 5",
+      "description": "Observed issue in web-app affecting user workflows. Signal quality is low and triage is required.",
+      "reporter_type": "qa",
+      "service": "web-app",
+      "component_candidates": [
+        "web-app",
+        "ios-app",
+        "database"
+      ],
+      "created_at": "2024-03-01T09:52:00",
+      "customer_tier": "pro",
+      "repro_steps_present": false,
+      "logs_present": true,
+      "attachments_count": 1,
+      "suspected_duplicate_ids": []
+    },
+    {
+      "ticket_id": "BUG-3006",
+      "title": "ios-app incident pattern 6",
+      "description": "Observed issue in mobile-app affecting user workflows. Signal quality is high and triage is required.",
+      "reporter_type": "monitoring",
+      "service": "mobile-app",
+      "component_candidates": [
+        "ios-app",
+        "android-app",
+        "cache"
+      ],
+      "created_at": "2024-03-01T10:05:00",
+      "customer_tier": "enterprise",
+      "repro_steps_present": true,
+      "logs_present": false,
+      "attachments_count": 2,
+      "suspected_duplicate_ids": []
+    },
+    {
+      "ticket_id": "BUG-3007",
+      "title": "android-app incident pattern 7",
+      "description": "Observed issue in mobile-app affecting user workflows. Signal quality is high and triage is required.",
+      "reporter_type": "user",
+      "service": "mobile-app",
+      "component_candidates": [
+        "android-app",
+        "database",
+        "cdn"
+      ],
+      "created_at": "2024-03-01T10:18:00",
+      "customer_tier": "pro",
+      "repro_steps_present": true,
+      "logs_present": true,
+      "attachments_count": 3,
+      "suspected_duplicate_ids": []
+    },
+    {
+      "ticket_id": "BUG-3008",
+      "title": "database incident pattern 8",
+      "description": "Observed issue in analytics affecting user workflows. Signal quality is low and triage is required.",
+      "reporter_type": "qa",
+      "service": "analytics",
+      "component_candidates": [
+        "database",
+        "cache",
+        "api-gateway"
+      ],
+      "created_at": "2024-03-01T10:31:00",
+      "customer_tier": "free",
+      "repro_steps_present": false,
+      "logs_present": true,
+      "attachments_count": 4,
+      "suspected_duplicate_ids": []
+    },
+    {
+      "ticket_id": "BUG-3009",
+      "title": "cache incident pattern 9",
+      "description": "Observed issue in infra affecting user workflows. Signal quality is high and triage is required.",
+      "reporter_type": "monitoring",
+      "service": "infra",
+      "component_candidates": [
+        "cache",
+        "cdn",
+        "auth-service"
+      ],
+      "created_at": "2024-03-01T10:44:00",
+      "customer_tier": "enterprise",
+      "repro_steps_present": true,
+      "logs_present": true,
+      "attachments_count": 1,
+      "suspected_duplicate_ids": []
+    },
+    {
+      "ticket_id": "BUG-3010",
+      "title": "cdn incident pattern 10",
+      "description": "Observed issue in media affecting user workflows. Signal quality is high and triage is required.",
+      "reporter_type": "user",
+      "service": "media",
+      "component_candidates": [
+        "cdn",
+        "api-gateway",
+        "user-service"
+      ],
+      "created_at": "2024-03-01T10:57:00",
+      "customer_tier": "pro",
+      "repro_steps_present": true,
+      "logs_present": false,
+      "attachments_count": 2,
+      "suspected_duplicate_ids": [
+        "BUG-3002"
+      ]
+    },
+    {
+      "ticket_id": "BUG-3011",
+      "title": "api-gateway incident pattern 11",
+      "description": "Observed issue in api affecting user workflows. Signal quality is high and triage is required.",
+      "reporter_type": "qa",
+      "service": "api",
+      "component_candidates": [
+        "api-gateway",
+        "auth-service",
+        "payment-service"
+      ],
+      "created_at": "2024-03-01T11:10:00",
+      "customer_tier": "enterprise",
+      "repro_steps_present": true,
+      "logs_present": true,
+      "attachments_count": 3,
+      "suspected_duplicate_ids": [
+        "BUG-3002"
+      ]
+    },
+    {
+      "ticket_id": "BUG-3012",
+      "title": "auth-service incident pattern 12",
+      "description": "Observed issue in auth affecting user workflows. Signal quality is high and triage is required.",
+      "reporter_type": "monitoring",
+      "service": "auth",
+      "component_candidates": [
+        "auth-service",
+        "user-service",
+        "web-app"
+      ],
+      "created_at": "2024-03-01T11:23:00",
+      "customer_tier": "pro",
+      "repro_steps_present": true,
+      "logs_present": true,
+      "attachments_count": 4,
+      "suspected_duplicate_ids": []
+    },
+    {
+      "ticket_id": "BUG-3013",
+      "title": "user-service incident pattern 13",
+      "description": "Observed issue in identity affecting user workflows. Signal quality is high and triage is required.",
+      "reporter_type": "user",
+      "service": "identity",
+      "component_candidates": [
+        "user-service",
+        "payment-service",
+        "ios-app"
+      ],
+      "created_at": "2024-03-01T11:36:00",
+      "customer_tier": "free",
+      "repro_steps_present": true,
+      "logs_present": true,
+      "attachments_count": 1,
+      "suspected_duplicate_ids": []
+    },
+    {
+      "ticket_id": "BUG-3014",
+      "title": "payment-service incident pattern 14",
+      "description": "Observed issue in payments affecting user workflows. Signal quality is high and triage is required.",
+      "reporter_type": "qa",
+      "service": "payments",
+      "component_candidates": [
+        "payment-service",
+        "web-app",
+        "android-app"
+      ],
+      "created_at": "2024-03-01T11:49:00",
+      "customer_tier": "enterprise",
+      "repro_steps_present": true,
+      "logs_present": false,
+      "attachments_count": 2,
+      "suspected_duplicate_ids": []
+    },
+    {
+      "ticket_id": "BUG-3015",
+      "title": "web-app incident pattern 15",
+      "description": "Observed issue in web-app affecting user workflows. Signal quality is high and triage is required.",
+      "reporter_type": "monitoring",
+      "service": "web-app",
+      "component_candidates": [
+        "web-app",
+        "ios-app",
+        "database"
+      ],
+      "created_at": "2024-03-01T12:02:00",
+      "customer_tier": "pro",
+      "repro_steps_present": true,
+      "logs_present": true,
+      "attachments_count": 3,
+      "suspected_duplicate_ids": [
+        "BUG-3001"
+      ]
+    },
+    {
+      "ticket_id": "BUG-3016",
+      "title": "ios-app incident pattern 16",
+      "description": "Observed issue in mobile-app affecting user workflows. Signal quality is low and triage is required.",
+      "reporter_type": "user",
+      "service": "mobile-app",
+      "component_candidates": [
+        "ios-app",
+        "android-app",
+        "cache"
+      ],
+      "created_at": "2024-03-01T12:15:00",
+      "customer_tier": "enterprise",
+      "repro_steps_present": false,
+      "logs_present": true,
+      "attachments_count": 4,
+      "suspected_duplicate_ids": []
+    },
+    {
+      "ticket_id": "BUG-3017",
+      "title": "android-app incident pattern 17",
+      "description": "Observed issue in mobile-app affecting user workflows. Signal quality is high and triage is required.",
+      "reporter_type": "qa",
+      "service": "mobile-app",
+      "component_candidates": [
+        "android-app",
+        "database",
+        "cdn"
+      ],
+      "created_at": "2024-03-01T12:28:00",
+      "customer_tier": "pro",
+      "repro_steps_present": true,
+      "logs_present": true,
+      "attachments_count": 1,
+      "suspected_duplicate_ids": []
+    },
+    {
+      "ticket_id": "BUG-3018",
+      "title": "database incident pattern 18",
+      "description": "Observed issue in analytics affecting user workflows. Signal quality is low and triage is required.",
+      "reporter_type": "monitoring",
+      "service": "analytics",
+      "component_candidates": [
+        "database",
+        "cache",
+        "api-gateway"
+      ],
+      "created_at": "2024-03-01T12:41:00",
+      "customer_tier": "free",
+      "repro_steps_present": false,
+      "logs_present": false,
+      "attachments_count": 2,
+      "suspected_duplicate_ids": []
+    },
+    {
+      "ticket_id": "BUG-3019",
+      "title": "cache incident pattern 19",
+      "description": "Observed issue in infra affecting user workflows. Signal quality is high and triage is required.",
+      "reporter_type": "user",
+      "service": "infra",
+      "component_candidates": [
+        "cache",
+        "cdn",
+        "auth-service"
+      ],
+      "created_at": "2024-03-01T12:54:00",
+      "customer_tier": "enterprise",
+      "repro_steps_present": true,
+      "logs_present": true,
+      "attachments_count": 3,
+      "suspected_duplicate_ids": []
+    },
+    {
+      "ticket_id": "BUG-3020",
+      "title": "cdn incident pattern 20",
+      "description": "Observed issue in media affecting user workflows. Signal quality is high and triage is required.",
+      "reporter_type": "qa",
+      "service": "media",
+      "component_candidates": [
+        "cdn",
+        "api-gateway",
+        "user-service"
+      ],
+      "created_at": "2024-03-01T13:07:00",
+      "customer_tier": "pro",
+      "repro_steps_present": true,
+      "logs_present": true,
+      "attachments_count": 4,
+      "suspected_duplicate_ids": []
+    },
+    {
+      "ticket_id": "BUG-3021",
+      "title": "api-gateway incident pattern 21",
+      "description": "Observed issue in api affecting user workflows. Signal quality is high and triage is required.",
+      "reporter_type": "monitoring",
+      "service": "api",
+      "component_candidates": [
+        "api-gateway",
+        "auth-service",
+        "payment-service"
+      ],
+      "created_at": "2024-03-01T13:20:00",
+      "customer_tier": "enterprise",
+      "repro_steps_present": true,
+      "logs_present": true,
+      "attachments_count": 1,
+      "suspected_duplicate_ids": []
+    },
+    {
+      "ticket_id": "BUG-3022",
+      "title": "auth-service incident pattern 22",
+      "description": "Observed issue in auth affecting user workflows. Signal quality is high and triage is required.",
+      "reporter_type": "user",
+      "service": "auth",
+      "component_candidates": [
+        "auth-service",
+        "user-service",
+        "web-app"
+      ],
+      "created_at": "2024-03-01T13:33:00",
+      "customer_tier": "pro",
+      "repro_steps_present": true,
+      "logs_present": false,
+      "attachments_count": 2,
+      "suspected_duplicate_ids": [
+        "BUG-3017"
+      ]
+    },
+    {
+      "ticket_id": "BUG-3023",
+      "title": "user-service incident pattern 23",
+      "description": "Observed issue in identity affecting user workflows. Signal quality is high and triage is required.",
+      "reporter_type": "qa",
+      "service": "identity",
+      "component_candidates": [
+        "user-service",
+        "payment-service",
+        "ios-app"
+      ],
+      "created_at": "2024-03-01T13:46:00",
+      "customer_tier": "free",
+      "repro_steps_present": true,
+      "logs_present": true,
+      "attachments_count": 3,
+      "suspected_duplicate_ids": []
+    },
+    {
+      "ticket_id": "BUG-3024",
+      "title": "payment-service incident pattern 24",
+      "description": "Observed issue in payments affecting user workflows. Signal quality is low and triage is required.",
+      "reporter_type": "monitoring",
+      "service": "payments",
+      "component_candidates": [
+        "payment-service",
+        "web-app",
+        "android-app"
+      ],
+      "created_at": "2024-03-01T13:59:00",
+      "customer_tier": "enterprise",
+      "repro_steps_present": false,
+      "logs_present": true,
+      "attachments_count": 4,
+      "suspected_duplicate_ids": []
+    },
+    {
+      "ticket_id": "BUG-3025",
+      "title": "web-app incident pattern 25",
+      "description": "Observed issue in web-app affecting user workflows. Signal quality is high and triage is required.",
+      "reporter_type": "user",
+      "service": "web-app",
+      "component_candidates": [
+        "web-app",
+        "ios-app",
+        "database"
+      ],
+      "created_at": "2024-03-01T14:12:00",
+      "customer_tier": "pro",
+      "repro_steps_present": true,
+      "logs_present": true,
+      "attachments_count": 1,
+      "suspected_duplicate_ids": []
+    }
+  ],
+  "ground_truths": [
+    {
+      "ticket_id": "BUG-3001",
+      "true_severity": "sev0",
+      "true_priority": "p0",
+      "true_component": "api-gateway",
+      "true_assignee_team": "backend-api",
+      "duplicate_of": null,
+      "needs_more_info": false
+    },
+    {
+      "ticket_id": "BUG-3002",
+      "true_severity": "sev1",
+      "true_priority": "p1",
+      "true_component": "auth-service",
+      "true_assignee_team": "backend-api",
+      "duplicate_of": null,
+      "needs_more_info": false
+    },
+    {
+      "ticket_id": "BUG-3003",
+      "true_severity": "sev2",
+      "true_priority": "p2",
+      "true_component": "user-service",
+      "true_assignee_team": "backend-api",
+      "duplicate_of": null,
+      "needs_more_info": true
+    },
+    {
+      "ticket_id": "BUG-3004",
+      "true_severity": "sev1",
+      "true_priority": "p1",
+      "true_component": "payment-service",
+      "true_assignee_team": "backend-api",
+      "duplicate_of": null,
+      "needs_more_info": false
+    },
+    {
+      "ticket_id": "BUG-3005",
+      "true_severity": "sev3",
+      "true_priority": "p3",
+      "true_component": "web-app",
+      "true_assignee_team": "frontend-web",
+      "duplicate_of": null,
+      "needs_more_info": true
+    },
+    {
+      "ticket_id": "BUG-3006",
+      "true_severity": "sev2",
+      "true_priority": "p2",
+      "true_component": "ios-app",
+      "true_assignee_team": "mobile-ios",
+      "duplicate_of": null,
+      "needs_more_info": false
+    },
+    {
+      "ticket_id": "BUG-3007",
+      "true_severity": "sev1",
+      "true_priority": "p1",
+      "true_component": "android-app",
+      "true_assignee_team": "mobile-android",
+      "duplicate_of": null,
+      "needs_more_info": false
+    },
+    {
+      "ticket_id": "BUG-3008",
+      "true_severity": "sev2",
+      "true_priority": "p2",
+      "true_component": "database",
+      "true_assignee_team": "data-platform",
+      "duplicate_of": null,
+      "needs_more_info": true
+    },
+    {
+      "ticket_id": "BUG-3009",
+      "true_severity": "sev2",
+      "true_priority": "p2",
+      "true_component": "cache",
+      "true_assignee_team": "infrastructure",
+      "duplicate_of": null,
+      "needs_more_info": false
+    },
+    {
+      "ticket_id": "BUG-3010",
+      "true_severity": "sev1",
+      "true_priority": "p1",
+      "true_component": "cdn",
+      "true_assignee_team": "infrastructure",
+      "duplicate_of": "BUG-3002",
+      "needs_more_info": false
+    },
+    {
+      "ticket_id": "BUG-3011",
+      "true_severity": "sev1",
+      "true_priority": "p1",
+      "true_component": "api-gateway",
+      "true_assignee_team": "backend-api",
+      "duplicate_of": "BUG-3002",
+      "needs_more_info": false
+    },
+    {
+      "ticket_id": "BUG-3012",
+      "true_severity": "sev0",
+      "true_priority": "p0",
+      "true_component": "auth-service",
+      "true_assignee_team": "backend-api",
+      "duplicate_of": null,
+      "needs_more_info": false
+    },
+    {
+      "ticket_id": "BUG-3013",
+      "true_severity": "sev3",
+      "true_priority": "p3",
+      "true_component": "user-service",
+      "true_assignee_team": "backend-api",
+      "duplicate_of": null,
+      "needs_more_info": false
+    },
+    {
+      "ticket_id": "BUG-3014",
+      "true_severity": "sev1",
+      "true_priority": "p1",
+      "true_component": "payment-service",
+      "true_assignee_team": "backend-api",
+      "duplicate_of": null,
+      "needs_more_info": false
+    },
+    {
+      "ticket_id": "BUG-3015",
+      "true_severity": "sev0",
+      "true_priority": "p0",
+      "true_component": "web-app",
+      "true_assignee_team": "frontend-web",
+      "duplicate_of": "BUG-3001",
+      "needs_more_info": false
+    },
+    {
+      "ticket_id": "BUG-3016",
+      "true_severity": "sev2",
+      "true_priority": "p2",
+      "true_component": "ios-app",
+      "true_assignee_team": "mobile-ios",
+      "duplicate_of": null,
+      "needs_more_info": true
+    },
+    {
+      "ticket_id": "BUG-3017",
+      "true_severity": "sev1",
+      "true_priority": "p1",
+      "true_component": "android-app",
+      "true_assignee_team": "mobile-android",
+      "duplicate_of": null,
+      "needs_more_info": false
+    },
+    {
+      "ticket_id": "BUG-3018",
+      "true_severity": "sev2",
+      "true_priority": "p2",
+      "true_component": "database",
+      "true_assignee_team": "data-platform",
+      "duplicate_of": null,
+      "needs_more_info": true
+    },
+    {
+      "ticket_id": "BUG-3019",
+      "true_severity": "sev3",
+      "true_priority": "p3",
+      "true_component": "cache",
+      "true_assignee_team": "infrastructure",
+      "duplicate_of": null,
+      "needs_more_info": false
+    },
+    {
+      "ticket_id": "BUG-3020",
+      "true_severity": "sev2",
+      "true_priority": "p2",
+      "true_component": "cdn",
+      "true_assignee_team": "infrastructure",
+      "duplicate_of": null,
+      "needs_more_info": false
+    },
+    {
+      "ticket_id": "BUG-3021",
+      "true_severity": "sev0",
+      "true_priority": "p0",
+      "true_component": "api-gateway",
+      "true_assignee_team": "backend-api",
+      "duplicate_of": null,
+      "needs_more_info": false
+    },
+    {
+      "ticket_id": "BUG-3022",
+      "true_severity": "sev1",
+      "true_priority": "p1",
+      "true_component": "auth-service",
+      "true_assignee_team": "backend-api",
+      "duplicate_of": "BUG-3017",
+      "needs_more_info": false
+    },
+    {
+      "ticket_id": "BUG-3023",
+      "true_severity": "sev1",
+      "true_priority": "p1",
+      "true_component": "user-service",
+      "true_assignee_team": "backend-api",
+      "duplicate_of": null,
+      "needs_more_info": false
+    },
+    {
+      "ticket_id": "BUG-3024",
+      "true_severity": "sev2",
+      "true_priority": "p2",
+      "true_component": "payment-service",
+      "true_assignee_team": "backend-api",
+      "duplicate_of": null,
+      "needs_more_info": true
+    },
+    {
+      "ticket_id": "BUG-3025",
+      "true_severity": "sev3",
+      "true_priority": "p3",
+      "true_component": "web-app",
+      "true_assignee_team": "frontend-web",
+      "duplicate_of": null,
+      "needs_more_info": false
+    }
+  ]
+}

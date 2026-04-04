@@ -1,0 +1,15 @@
+id: bug-triage-openenv
+name: Bug Triage OpenEnv
+version: 0.1.0
+entrypoint: openenv_bug_triage.env:BugTriageEnv
+tags:
+  - openenv
+  - bug-triage
+  - real-world
+tasks:
+  - id: bug_triage_easy
+    difficulty: easy
+  - id: bug_triage_medium
+    difficulty: medium
+  - id: bug_triage_hard
+    difficulty: hard
