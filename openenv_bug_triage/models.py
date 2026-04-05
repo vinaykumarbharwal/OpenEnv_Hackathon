@@ -152,7 +152,7 @@ class ActionModel(BaseModel):
 
 class RewardModel(BaseModel):
     """Reward information for a step."""
-    step_reward: float = Field(..., ge=-1.0, le=1.0)
+    step_reward: float = Field(..., ge=0.0, le=1.0)
     cumulative_reward: float
     reward_breakdown: dict[str, float] = Field(default_factory=dict)
 

@@ -1,0 +1,112 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bug Triage OpenEnv Console</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/ui/styles.css" />
+</head>
+<body>
+  <div class="aurora" aria-hidden="true"></div>
+
+  <header class="hero reveal">
+    <div>
+      <p class="kicker">OpenEnv - Dark Ops Console</p>
+      <h1>Bug Triage Environment</h1>
+      <p class="subtitle">Interactive dark-mode frontend for reset / step / state workflows.</p>
+    </div>
+    <div class="pillset">
+      <span class="pill">Real-World Task</span>
+      <span class="pill">Typed Actions</span>
+      <span class="pill">Dense Rewards</span>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="card reveal" id="controls-card">
+      <h2>Session Controls</h2>
+      <div class="grid-2">
+        <label>
+          <span>Task</span>
+          <select id="task-select">
+            <option value="bug_triage_easy">bug_triage_easy</option>
+            <option value="bug_triage_medium">bug_triage_medium</option>
+            <option value="bug_triage_hard">bug_triage_hard</option>
+          </select>
+        </label>
+        <label>
+          <span>Seed</span>
+          <input id="seed-input" type="number" value="42" min="0" step="1" />
+        </label>
+      </div>
+      <div class="button-row">
+        <button id="reset-btn" class="btn btn-accent">Reset Episode</button>
+        <button id="state-btn" class="btn btn-ghost">Fetch State</button>
+      </div>
+      <div id="status" class="status status-idle">Idle</div>
+      <div class="summary-grid">
+        <article>
+          <h3>Steps</h3>
+          <p id="steps-used">0</p>
+        </article>
+        <article>
+          <h3>Remaining</h3>
+          <p id="steps-remaining">0</p>
+        </article>
+        <article>
+          <h3>Done</h3>
+          <p id="done-flag">false</p>
+        </article>
+        <article>
+          <h3>Cumulative</h3>
+          <p id="cumulative-reward">0.00</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="card reveal" id="ticket-card">
+      <h2>Current Ticket</h2>
+      <div id="ticket-meta" class="ticket-meta">Run reset to load a task.</div>
+      <pre id="ticket-body" class="json-view">{}</pre>
+    </section>
+
+    <section class="card reveal" id="action-card">
+      <h2>Action Composer</h2>
+      <label>
+        <span>Action Type</span>
+        <select id="action-type">
+          <option value="classify">classify</option>
+          <option value="assign">assign</option>
+          <option value="mark_duplicate">mark_duplicate</option>
+          <option value="request_info">request_info</option>
+          <option value="defer">defer</option>
+          <option value="close">close</option>
+          <option value="escalate_incident">escalate_incident</option>
+          <option value="next_ticket">next_ticket</option>
+        </select>
+      </label>
+      <div id="payload-fields" class="payload-grid"></div>
+      <div class="button-row">
+        <button id="step-btn" class="btn btn-hot">Step</button>
+      </div>
+      <pre id="action-preview" class="json-view">{"action_type":"classify"}</pre>
+    </section>
+
+    <section class="card reveal" id="logs-card">
+      <h2>Episode Log</h2>
+      <ol id="step-log" class="log-list"></ol>
+    </section>
+
+    <section class="card reveal" id="state-card">
+      <h2>State Snapshot</h2>
+      <pre id="state-json" class="json-view">{}</pre>
+    </section>
+  </main>
+
+  <script src="/ui/app.js"></script>
+</body>
+</html>
+

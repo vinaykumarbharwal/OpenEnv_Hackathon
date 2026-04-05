@@ -9,7 +9,10 @@ from .models import ActionModel, TicketGroundTruth
 class RewardCalculator:
     """Calculates rewards for bug triage actions."""
     
-    # Dense progress signals
+    # Base reward for any action
+    BASE_REWARD = 0.50
+    
+    # Dense progress signals (bonuses on top of base)
     CORRECT_SEVERITY = 0.20
     CORRECT_PRIORITY = 0.15
     CORRECT_COMPONENT = 0.15
@@ -18,16 +21,16 @@ class RewardCalculator:
     CORRECT_REQUEST_INFO = 0.10
     CORRECT_ESCALATION = 0.15
     
-    # Negative signals
-    INCORRECT_CLOSE_DEFER = -0.20
-    MISSED_ESCALATION = -0.15
-    INVALID_ACTION = -0.05
-    REPEATED_NOOP = -0.02
-    UNNECESSARY_SWITCH = -0.01
+    # Negative signals (penalties reducing from base)
+    INCORRECT_CLOSE_DEFER = 0.20
+    MISSED_ESCALATION = 0.15
+    INVALID_ACTION = 0.30
+    REPEATED_NOOP = 0.10
+    UNNECESSARY_SWITCH = 0.05
     
     # Terminal bonuses/penalties
     ALL_CRITICAL_TRIAGED = 0.10
-    BUDGET_EXHAUSTED_CRITICAL_REMAINING = -0.10
+    BUDGET_EXHAUSTED_CRITICAL_REMAINING = 0.10
     
     def __init__(self):
         self.action_history = []
@@ -45,16 +48,17 @@ class RewardCalculator:
     ) -> tuple[float, dict[str, float]]:
         """
         Calculate reward for a single step.
+        Rewards are in range [0.0, 1.0].
         
         Returns:
             tuple of (clamped_reward, breakdown_dict)
         """
         breakdown = {}
-        total_reward = 0.0
+        total_reward = self.BASE_REWARD  # Start with base reward
         
         if not is_valid:
-            breakdown["invalid_action"] = self.INVALID_ACTION
-            total_reward += self.INVALID_ACTION
+            breakdown["invalid_action_penalty"] = -self.INVALID_ACTION
+            total_reward -= self.INVALID_ACTION
             return self._clamp_reward(total_reward), breakdown
         
         # Track action history for loop detection
@@ -101,21 +105,21 @@ class RewardCalculator:
         # Penalize incorrect close/defer
         if action.action_type in ["close", "defer"]:
             if not ground_truth.duplicate_of and ground_truth.needs_more_info:
-                breakdown["incorrect_close_defer"] = self.INCORRECT_CLOSE_DEFER
-                total_reward += self.INCORRECT_CLOSE_DEFER
+                breakdown["incorrect_close_defer_penalty"] = -self.INCORRECT_CLOSE_DEFER
+                total_reward -= self.INCORRECT_CLOSE_DEFER
         
         # Penalize missed critical escalation
         if is_critical_ticket and action.action_type != "escalate_incident":
             if ground_truth.true_severity in ["sev0", "sev1"]:
-                breakdown["missed_escalation"] = self.MISSED_ESCALATION
-                total_reward += self.MISSED_ESCALATION
+                breakdown["missed_escalation_penalty"] = -self.MISSED_ESCALATION
+                total_reward -= self.MISSED_ESCALATION
         
         # Check for repeated no-op behavior
         if len(self.action_history) >= 3:
             last_three = self.action_history[-3:]
             if last_three[0] == last_three[1] == last_three[2]:
-                breakdown["repeated_noop"] = self.REPEATED_NOOP
-                total_reward += self.REPEATED_NOOP
+                breakdown["repeated_noop_penalty"] = -self.REPEATED_NOOP
+                total_reward -= self.REPEATED_NOOP
         
         # Terminal bonuses/penalties
         if is_terminal:
@@ -124,14 +128,14 @@ class RewardCalculator:
                 total_reward += self.ALL_CRITICAL_TRIAGED
             
             if budget_exhausted_with_critical:
-                breakdown["budget_exhausted"] = self.BUDGET_EXHAUSTED_CRITICAL_REMAINING
-                total_reward += self.BUDGET_EXHAUSTED_CRITICAL_REMAINING
+                breakdown["budget_exhausted_penalty"] = -self.BUDGET_EXHAUSTED_CRITICAL_REMAINING
+                total_reward -= self.BUDGET_EXHAUSTED_CRITICAL_REMAINING
         
         return self._clamp_reward(total_reward), breakdown
     
     def _clamp_reward(self, reward: float) -> float:
-        """Clamp reward to [-1.0, 1.0] range."""
-        return max(-1.0, min(1.0, reward))
+        """Clamp reward to [0.0, 1.0] range."""
+        return max(0.0, min(1.0, reward))
     
     def reset(self):
         """Reset action history."""

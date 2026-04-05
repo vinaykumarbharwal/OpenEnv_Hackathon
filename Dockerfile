@@ -9,7 +9,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy source code and metadata
 COPY openenv_bug_triage/ ./openenv_bug_triage/
 COPY openenv.yaml .
-COPY scripts/ ./scripts/
 COPY README.md .
 
 # Expose port for HF Spaces

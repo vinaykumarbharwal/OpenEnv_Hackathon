@@ -16,10 +16,8 @@ from datetime import datetime
 from dotenv import load_dotenv
 from openai import OpenAI
 
-# Load environment variables from .env file
 load_dotenv()
 
-# Ensure project root is importable when running as: python scripts/baseline_inference.py
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))

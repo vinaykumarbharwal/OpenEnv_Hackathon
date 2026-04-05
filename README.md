@@ -71,9 +71,9 @@ class ActionModel(BaseModel):
 
 ### Reward Function
 
-Rewards are clamped to `[-1.0, 1.0]` per step. Final episode score is normalized to `[0.0, 1.0]`.
+Rewards are in range `[0.0, 1.0]` per step, with a base reward of 0.50 for any valid action. Final episode score is normalized to `[0.0, 1.0]`.
 
-**Dense Progress Signals**:
+**Dense Progress Signals** (bonuses added to base):
 - `+0.20`: Correct severity classification
 - `+0.15`: Correct priority classification
 - `+0.15`: Correct component assignment
@@ -82,12 +82,12 @@ Rewards are clamped to `[-1.0, 1.0]` per step. Final episode score is normalized
 - `+0.10`: Correct request for more info
 - `+0.15`: Correct escalation for sev0/sev1 incidents
 
-**Negative Signals**:
+**Negative Signals** (penalties subtracted from base):
 - `-0.20`: Incorrect close/defer on valid bug
 - `-0.15`: Missed critical escalation
-- `-0.05`: Invalid action schema
-- `-0.02`: Repeated no-op / loop behavior
-- `-0.01`: Unnecessary ticket switches
+- `-0.30`: Invalid action schema
+- `-0.10`: Repeated no-op / loop behavior
+- `-0.05`: Unnecessary ticket switches
 
 **Terminal Bonuses/Penalties**:
 - `+0.10`: All critical tickets triaged within budget
@@ -150,6 +150,47 @@ Rewards are clamped to `[-1.0, 1.0]` per step. Final episode score is normalized
 
 ## Usage
 
+### Submission Inference (Mandatory)
+
+For submission, use the root script `inference.py` (not `scripts/baseline_inference.py`).
+It uses the OpenAI client with these required environment variables:
+
+- `API_BASE_URL` (for Groq: `https://api.groq.com/openai/v1`)
+- `MODEL_NAME` (for example `llama-3.3-70b-versatile`)
+- `HF_TOKEN` (set this to your Groq API key)
+
+Example:
+
+```bash
+# Linux/macOS
+export API_BASE_URL="https://api.groq.com/openai/v1"
+export MODEL_NAME="llama-3.3-70b-versatile"
+export HF_TOKEN="<your-groq-key>"
+python inference.py
+```
+
+```powershell
+# Windows PowerShell
+$env:API_BASE_URL = "https://api.groq.com/openai/v1"
+$env:MODEL_NAME = "llama-3.3-70b-versatile"
+$env:HF_TOKEN = "<your-groq-key>"
+python .\inference.py
+```
+
+`inference.py` emits structured stdout lines in the required format:
+
+- `[START] task=<task_name> env=<benchmark> model=<model_name>`
+- `[STEP] step=<n> action=<action_str> reward=<0.00> done=<true|false> error=<msg|null>`
+- `[END] success=<true|false> steps=<n> rewards=<r1,r2,...,rn>`
+
+
+### Dark Mode Frontend
+
+The app now ships with a dark-mode web console for interactive triage testing.
+
+- Local: run `uvicorn openenv_bug_triage.app:app --host 0.0.0.0 --port 7860`
+- Open in browser: `http://localhost:7860/`
+- Uses API endpoints: `GET/POST /reset`, `POST /step`, `GET /state`
 ### Running Baseline Inference
 
 The baseline script runs all three tasks using an OpenAI-compatible API.
@@ -214,6 +255,22 @@ state = env.state()
 print(f"Steps used: {state.steps_used}/{state.steps_remaining}")
 ```
 
+### Pre-Submission Validation
+
+Run the local pre-submit checks before final submission:
+
+```bash
+# Skip HF ping if your Space is not deployed yet
+python precheck.py --skip-space
+
+# Full check (recommended before submit)
+python precheck.py --space-url https://<your-space-subdomain>.hf.space
+```
+
+This validates:
+- HF Space `GET /reset` returns HTTP 200
+- `docker build` succeeds
+- `openenv validate` succeeds
 ## Deployment
 
 ### Hugging Face Spaces
@@ -292,4 +349,8 @@ MIT
 ## Acknowledgments
 
 Built according to the OpenEnv specification for creating reproducible, real-world AI training environments.
+
+
+
+
 
