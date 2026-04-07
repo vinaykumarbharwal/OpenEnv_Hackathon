@@ -325,5 +325,4 @@ README must include:
 This sequence is the recommended path for turning the spec into a working submission.
 1. Start Docker Desktop engine                                                                     
   2. Install validator tool: pip install openenv-core                                                
-  3. Run: python precheck.py --space-url https://<your-space>.hf.space                               
-   
+  3. Run: python precheck.py --space-url https://<your-space>.hf.space                              
