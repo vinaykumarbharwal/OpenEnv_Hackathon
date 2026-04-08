@@ -1,5 +1,13 @@
-<<<<<<< HEAD
-﻿
+---
+title: Bug Triage OpenEnv
+emoji: "🐞"
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # Bug Triage OpenEnv
 
 A real-world simulation environment for software bug triage workflows, implementing the OpenEnv specification.
@@ -402,23 +410,3 @@ Built according to the OpenEnv specification for creating reproducible, real-wor
 
 
 
----
-title: Bug Triage OpenEnv
-emoji: 🐞
-colorFrom: blue
-colorTo: green
-sdk: docker
-pinned: false
----
-=======
----
-title: Open Env
-emoji: ⚡
-colorFrom: purple
-colorTo: red
-sdk: docker
-pinned: false
----
-
-Check out the configuration reference at https://huggingface.co/docs/hub/spaces-config-reference
->>>>>>> hf/main
