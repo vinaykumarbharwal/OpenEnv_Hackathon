@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -146,10 +146,12 @@ def reset_get(task_id: Optional[str] = None, seed: Optional[int] = None) -> dict
 
 
 @app.post("/reset")
-def reset_post(req: ResetRequest) -> dict:
-    """Typed reset endpoint (POST)."""
+def reset_post(req: Optional[ResetRequest] = Body(default=None)) -> dict:
+    """Typed reset endpoint (POST), compatible with empty-body validator calls."""
+    task_id = req.task_id if req is not None else None
+    seed = req.seed if req is not None else None
     try:
-        observation = env.reset(task_id=req.task_id, seed=req.seed)
+        observation = env.reset(task_id=task_id, seed=seed)
     except (FileNotFoundError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return observation.model_dump(mode="json")
