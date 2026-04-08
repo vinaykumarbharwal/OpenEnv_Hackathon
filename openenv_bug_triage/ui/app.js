@@ -4,14 +4,18 @@ const els = {
   resetBtn: document.getElementById("reset-btn"),
   stateBtn: document.getElementById("state-btn"),
   stepBtn: document.getElementById("step-btn"),
+  suggestBtn: document.getElementById("suggest-btn"),
   status: document.getElementById("status"),
   healthPill: document.getElementById("health-pill"),
   taskCards: document.getElementById("task-cards"),
   taskBrief: document.getElementById("task-brief"),
+  baselineCards: document.getElementById("baseline-cards"),
+  baselineNote: document.getElementById("baseline-note"),
   actionType: document.getElementById("action-type"),
   actionHint: document.getElementById("action-hint"),
   payloadFields: document.getElementById("payload-fields"),
   actionPreview: document.getElementById("action-preview"),
+  copyActionBtn: document.getElementById("copy-action-btn"),
   ticketMeta: document.getElementById("ticket-meta"),
   ticketTitle: document.getElementById("ticket-title"),
   ticketSummary: document.getElementById("ticket-summary"),
@@ -24,6 +28,7 @@ const els = {
   rewardBreakdown: document.getElementById("reward-breakdown"),
   stepLog: document.getElementById("step-log"),
   stateJson: document.getElementById("state-json"),
+  copyStateBtn: document.getElementById("copy-state-btn"),
   stepsUsed: document.getElementById("steps-used"),
   stepsRemaining: document.getElementById("steps-remaining"),
   queueRemaining: document.getElementById("queue-remaining"),
@@ -225,6 +230,7 @@ function updateButtonState() {
   els.resetBtn.disabled = busy;
   els.stateBtn.disabled = busy;
   els.stepBtn.disabled = busy || !hasActiveTicket;
+  els.suggestBtn.disabled = busy || !hasActiveTicket;
 }
 
 function renderTokens(container, values, emptyLabel = "None") {
@@ -295,6 +301,23 @@ function renderTaskBrief() {
       ${guide.points.map((point) => `<li>${escapeHtml(point)}</li>`).join("")}
     </ul>
   `;
+}
+
+function renderBaseline(data) {
+  const results = Array.isArray(data?.results) ? data.results : [];
+  const meanScore = Number(data?.mean_score ?? 0);
+
+  els.baselineCards.innerHTML = results.length
+    ? results.map((result) => `
+        <article class="baseline-card">
+          <span>${escapeHtml(result.task_id)}</span>
+          <strong>${Number(result.score ?? 0).toFixed(2)}</strong>
+          <small>${result.passed ? "pass" : "below pass"}</small>
+        </article>
+      `).join("")
+    : '<article class="baseline-card"><span>No baseline data</span><strong>0.00</strong><small>offline</small></article>';
+
+  els.baselineNote.textContent = `Mean score ${meanScore.toFixed(2)} using ${data?.model || "offline baseline"}.`;
 }
 
 function renderActionHint() {
@@ -469,6 +492,44 @@ function renderPreview() {
   els.actionPreview.textContent = pretty(buildAction());
 }
 
+function setActionBuilderFromAction(action) {
+  if (!action?.action_type) {
+    return;
+  }
+
+  els.actionType.value = action.action_type;
+  renderPayloadFields();
+
+  if (action.action_type === "classify" && action.classify) {
+    document.getElementById("f-severity").value = action.classify.severity;
+    document.getElementById("f-priority").value = action.classify.priority;
+    document.getElementById("f-component").value = action.classify.component;
+  } else if (action.action_type === "assign" && action.assign) {
+    document.getElementById("f-team").value = action.assign.team;
+  } else if (action.action_type === "mark_duplicate" && action.mark_duplicate) {
+    document.getElementById("f-canonical").value = action.mark_duplicate.canonical_ticket_id;
+  } else if (action.action_type === "request_info" && action.request_info) {
+    document.getElementById("f-info-type").value = action.request_info.info_type;
+  } else if (action.action_type === "defer" && action.defer) {
+    document.getElementById("f-defer-reason").value = action.defer.reason;
+  } else if (action.action_type === "close" && action.close) {
+    document.getElementById("f-close-reason").value = action.close.reason;
+  } else if (action.action_type === "escalate_incident" && action.escalate_incident) {
+    document.getElementById("f-justification").value = action.escalate_incident.justification;
+  }
+
+  renderPreview();
+}
+
+async function copyText(value, successMessage) {
+  try {
+    await navigator.clipboard.writeText(value);
+    setStatus(successMessage, "ok");
+  } catch (error) {
+    setStatus("Copy failed in this browser session.", "warn");
+  }
+}
+
 function renderRewardBreakdown(breakdown = null) {
   els.rewardBreakdown.innerHTML = "";
   const entries = breakdown ? Object.entries(breakdown) : [];
@@ -627,6 +688,15 @@ async function fetchTasks() {
   renderTaskBrief();
 }
 
+async function fetchBaseline() {
+  try {
+    const data = await api("/baseline");
+    renderBaseline(data);
+  } catch (error) {
+    renderBaseline({ results: [], mean_score: 0, model: "offline baseline" });
+  }
+}
+
 async function fetchState({ silent = false } = {}) {
   const state = await api("/state");
   els.stateJson.textContent = pretty(state);
@@ -690,6 +760,35 @@ async function doReset() {
       note: error.message,
       tone: "bad",
     });
+  } finally {
+    busy = false;
+    updateButtonState();
+  }
+}
+
+async function doSuggest() {
+  if (!currentObservation?.current_ticket || done) {
+    setStatus("Reset an active episode to get a suggestion.", "warn");
+    return;
+  }
+
+  try {
+    busy = true;
+    updateButtonState();
+    setStatus("Building suggestion...", "idle");
+
+    const result = await api("/suggest_action");
+    setActionBuilderFromAction(result.action);
+
+    appendLog({
+      title: "Suggested action loaded",
+      meta: `action=${result.action.action_type}`,
+      note: result.reason || "Suggestion ready in the action builder.",
+      tone: "neutral",
+    });
+    setStatus("Suggested action loaded into the builder.", "ok");
+  } catch (error) {
+    setStatus(`Suggestion failed: ${error.message}`, "error");
   } finally {
     busy = false;
     updateButtonState();
@@ -777,7 +876,10 @@ els.actionType.addEventListener("change", () => {
 els.payloadFields.addEventListener("input", renderPreview);
 els.payloadFields.addEventListener("change", renderPreview);
 els.resetBtn.addEventListener("click", doReset);
+els.suggestBtn.addEventListener("click", doSuggest);
 els.stepBtn.addEventListener("click", doStep);
+els.copyActionBtn.addEventListener("click", () => copyText(els.actionPreview.textContent, "Action JSON copied."));
+els.copyStateBtn.addEventListener("click", () => copyText(els.stateJson.textContent, "State JSON copied."));
 els.stateBtn.addEventListener("click", async () => {
   try {
     await fetchState();
@@ -796,6 +898,7 @@ renderSummaryMetrics(null);
 setStatus("Loading server state...", "idle");
 
 fetchHealth();
+fetchBaseline();
 fetchTasks()
   .then(() => fetchState({ silent: true }))
   .then(() => {

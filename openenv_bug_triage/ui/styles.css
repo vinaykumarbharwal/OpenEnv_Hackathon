@@ -353,6 +353,11 @@ textarea {
   opacity: 0.6;
 }
 
+.btn-small {
+  padding: 8px 12px;
+  font-size: 0.78rem;
+}
+
 .btn-primary {
   background: linear-gradient(135deg, var(--accent), #1f96a1);
   color: #f7fffe;
@@ -484,6 +489,54 @@ textarea {
 .task-brief {
   margin-top: 12px;
   padding: 18px;
+}
+
+.baseline-section {
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+  padding: 18px;
+}
+
+.baseline-head,
+.card-head,
+.inline-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.baseline-cards {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.baseline-card {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(248, 243, 234, 0.9);
+  padding: 14px;
+}
+
+.baseline-card span,
+.baseline-card small {
+  display: block;
+}
+
+.baseline-card span,
+.baseline-card small {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.baseline-card strong {
+  display: block;
+  margin: 6px 0 4px;
+  font-size: 1.2rem;
 }
 
 .task-brief-header {
@@ -743,12 +796,19 @@ textarea {
   .panel-head,
   .hero-meta,
   .preview-head,
-  .task-brief-header {
+  .task-brief-header,
+  .baseline-head,
+  .card-head,
+  .inline-actions {
     flex-direction: column;
     align-items: flex-start;
   }
 
   h1 {
     max-width: none;
+  }
+
+  .baseline-cards {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

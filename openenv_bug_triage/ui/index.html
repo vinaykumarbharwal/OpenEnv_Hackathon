@@ -146,6 +146,14 @@
 
         <div id="task-cards" class="task-cards"></div>
         <div id="task-brief" class="task-brief"></div>
+
+        <div class="baseline-section">
+          <div class="baseline-head">
+            <h3>Baseline snapshot</h3>
+            <p id="baseline-note" class="muted-copy">Loading baseline results...</p>
+          </div>
+          <div id="baseline-cards" class="baseline-cards"></div>
+        </div>
       </section>
 
       <section class="panel ticket-panel reveal" id="ticket-card">
@@ -220,13 +228,17 @@
         <div id="action-hint" class="hint-box">Choose an action to see payload guidance.</div>
 
         <div class="button-row">
+          <button id="suggest-btn" class="btn btn-secondary">Suggest action</button>
           <button id="step-btn" class="btn btn-accent">Submit step</button>
         </div>
 
         <div class="preview-card">
           <div class="preview-head">
             <h3>Action preview</h3>
-            <span>Typed payload</span>
+            <div class="inline-actions">
+              <span>Typed payload</span>
+              <button id="copy-action-btn" type="button" class="btn btn-secondary btn-small">Copy JSON</button>
+            </div>
           </div>
           <pre id="action-preview" class="json-view">{"action_type":"classify"}</pre>
         </div>
@@ -272,7 +284,10 @@
           </article>
 
           <article class="api-card">
-            <h3>Live state snapshot</h3>
+            <div class="card-head">
+              <h3>Live state snapshot</h3>
+              <button id="copy-state-btn" type="button" class="btn btn-secondary btn-small">Copy state</button>
+            </div>
             <pre id="state-json" class="json-view">{}</pre>
           </article>
         </div>
