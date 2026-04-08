@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Body, FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -58,9 +58,11 @@ def reset_get(task_id: Optional[str] = None, seed: Optional[int] = None) -> dict
 
 
 @app.post("/reset")
-def reset_post(req: ResetRequest) -> dict:
-    """Typed reset endpoint (POST)."""
-    observation = env.reset(task_id=req.task_id, seed=req.seed)
+def reset_post(req: Optional[ResetRequest] = Body(default=None)) -> dict:
+    """Typed reset endpoint (POST). Accepts optional body for validator compatibility."""
+    task_id = req.task_id if req is not None else None
+    seed = req.seed if req is not None else None
+    observation = env.reset(task_id=task_id, seed=seed)
     return observation.model_dump(mode="json")
 
 
