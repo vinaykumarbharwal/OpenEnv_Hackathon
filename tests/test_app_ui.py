@@ -30,6 +30,8 @@ def test_index_renders_ui_assets_at_root():
     assert 'href="/ui/styles.css"' in body
     assert 'src="/ui/app.js"' in body
     assert 'window.OPENENV_BASE_PATH = ""' in body
+    assert "Suggest action" in body
+    assert "Baseline snapshot" in body
 
 
 def test_index_renders_proxy_aware_asset_paths():

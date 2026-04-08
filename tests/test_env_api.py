@@ -1,4 +1,7 @@
-﻿"""Test OpenEnv API contract compliance."""
+"""Test OpenEnv API contract compliance."""
+
+import pytest
+
 from openenv_bug_triage import BugTriageEnv
 from openenv_bug_triage.models import ActionModel, ClassifyAction
 
@@ -22,8 +25,8 @@ def test_step():
         classify=ClassifyAction(
             severity="sev2",
             priority="p2",
-            component="api-gateway"
-        )
+            component="api-gateway",
+        ),
     )
 
     obs, reward, done, info = env.step(action)
@@ -38,3 +41,16 @@ def test_state():
     state = env.state()
     assert state.current_task_id == "bug_triage_easy"
     assert state.episode_done is False
+
+
+def test_action_model_rejects_mismatched_payloads():
+    """Typed actions should reject payloads that do not match the action type."""
+    with pytest.raises(ValueError):
+        ActionModel(
+            action_type="next_ticket",
+            classify=ClassifyAction(
+                severity="sev2",
+                priority="p2",
+                component="api-gateway",
+            ),
+        )

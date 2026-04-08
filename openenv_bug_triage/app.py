@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Optional
 
@@ -13,6 +14,7 @@ from pydantic import BaseModel
 
 from .env import BugTriageEnv
 from .models import ActionModel
+from .policy import suggest_action
 from .tasks import list_tasks
 
 
@@ -34,6 +36,17 @@ if UI_DIR.exists():
     app.mount("/ui", StaticFiles(directory=str(UI_DIR)), name="ui")
 
 env = BugTriageEnv()
+BASELINE_ARTIFACT = Path(__file__).resolve().parents[1] / "artifacts" / "baseline_scores.json"
+FALLBACK_BASELINE = {
+    "model": "offline-heuristic",
+    "offline_mode": True,
+    "mean_score": 0.7698,
+    "results": [
+        {"task_id": "bug_triage_easy", "score": 0.9920, "passed": True},
+        {"task_id": "bug_triage_medium", "score": 0.6715, "passed": False},
+        {"task_id": "bug_triage_hard", "score": 0.6460, "passed": False},
+    ],
+}
 
 
 class ResetRequest(BaseModel):
@@ -93,6 +106,32 @@ def tasks() -> dict:
             }
             for task_id, meta in registry.items()
         ],
+    }
+
+
+@app.get("/baseline")
+def baseline() -> dict:
+    if BASELINE_ARTIFACT.exists():
+        try:
+            return json.loads(BASELINE_ARTIFACT.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            pass
+    return FALLBACK_BASELINE
+
+
+@app.get("/suggest_action")
+def suggest_current_action() -> dict:
+    observation = env._get_observation()
+    history: list[str] = []
+
+    if env.current_task is not None and env.current_ticket_index < len(env.ticket_states):
+        history = list(env.ticket_states[env.current_ticket_index]["actions_taken"])
+
+    action, reason = suggest_action(observation=observation, action_history=history)
+    return {
+        "action": action.model_dump(mode="json", exclude_none=True),
+        "reason": reason,
+        "history": history,
     }
 
 

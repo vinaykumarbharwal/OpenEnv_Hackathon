@@ -21,7 +21,6 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-from dotenv import load_dotenv
 from openai import OpenAI
 
 # Make package importable when run from repo root.
@@ -34,13 +33,30 @@ from openenv_bug_triage.grader import BugTriageGrader
 from openenv_bug_triage.models import ActionModel
 
 
-load_dotenv()
+def _load_simple_env_file(dotenv_path: Path) -> None:
+    """Load simple KEY=VALUE lines without failing on stray shell commands."""
+    if not dotenv_path.exists():
+        return
 
-API_BASE_URL = os.getenv("API_BASE_URL", "https://api.groq.com/openai/v1")
-MODEL_NAME = os.getenv("MODEL_NAME", "llama-3.3-70b-versatile")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+    for raw_line in dotenv_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key:
+            os.environ.setdefault(key, value)
+
+
+_load_simple_env_file(PROJECT_ROOT / ".env")
+
 HF_TOKEN = os.getenv("HF_TOKEN")
-API_KEY = OPENAI_API_KEY or HF_TOKEN
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
+MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
+API_KEY = HF_TOKEN or OPENAI_API_KEY
 
 BENCHMARK = os.getenv("OPENENV_BENCHMARK", "bug-triage-openenv")
 TASKS = [
@@ -580,7 +596,8 @@ def main() -> int:
     if not offline_mode:
         if not API_KEY:
             print(
-                "OPENAI_API_KEY is required for live inference. "
+                "HF_TOKEN is required for live inference. "
+                "OPENAI_API_KEY is also accepted for direct OpenAI endpoints. "
                 "Set OPENENV_OFFLINE=1 to run the local fallback policy instead.",
                 file=sys.stderr,
             )
