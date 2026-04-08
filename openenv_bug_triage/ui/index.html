@@ -1,113 +1,285 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Bug Triage OpenEnv Console</title>
+  <title>OpenEnv Bug Triage Workspace</title>
   <link rel="icon" href="/ui/favicon.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/ui/styles.css" />
 </head>
 <body>
-  <div class="aurora" aria-hidden="true"></div>
+  <div class="backdrop" aria-hidden="true"></div>
 
-  <header class="hero reveal">
-    <div>
-      <p class="kicker">OpenEnv - Dark Ops Console</p>
-      <h1>Bug Triage Environment</h1>
-      <p class="subtitle">Interactive dark-mode frontend for reset / step / state workflows.</p>
-    </div>
-    <div class="pillset">
-      <span class="pill">Real-World Task</span>
-      <span class="pill">Typed Actions</span>
-      <span class="pill">Dense Rewards</span>
-    </div>
-  </header>
+  <div class="page-shell">
+    <header class="hero reveal">
+      <div class="hero-copy">
+        <p class="eyebrow">Round 1 · OpenEnv Submission</p>
+        <h1>Bug triage, shown as a clean real-world agent workspace.</h1>
+        <p class="hero-text">
+          This UI makes the judging story easy to follow: a real software workflow, the standard
+          <code>reset()</code> / <code>step()</code> / <code>state()</code> API, three graded tasks, and dense reward
+          feedback across the whole episode.
+        </p>
+        <div class="hero-tags">
+          <span class="tag">Real-world task</span>
+          <span class="tag">Typed models</span>
+          <span class="tag">3 graded tasks</span>
+          <span class="tag">Partial rewards</span>
+        </div>
+      </div>
 
-  <main class="layout">
-    <section class="card reveal" id="controls-card">
-      <h2>Session Controls</h2>
-      <div class="grid-2">
+      <aside class="hero-aside">
+        <p class="aside-label">Submission fit</p>
+        <ul class="signal-list">
+          <li>Classify, route, escalate, and request missing information for bug reports.</li>
+          <li>See task difficulty progress from easy to hard before you ever click reset.</li>
+          <li>Track queue pressure, reward, and state as the episode unfolds.</li>
+          <li>Keep the interface simple enough for demos, judges, and quick local checks.</li>
+        </ul>
+        <div class="hero-meta">
+          <span>API health</span>
+          <strong id="health-pill" class="health-pill is-pending">Checking...</strong>
+        </div>
+      </aside>
+    </header>
+
+    <section class="highlight-grid reveal">
+      <article class="highlight-card">
+        <p class="card-index">01</p>
+        <h2>Real workflow</h2>
+        <p>Incoming tickets are triaged the way real software teams handle severity, ownership, duplicates, and escalations.</p>
+      </article>
+      <article class="highlight-card">
+        <p class="card-index">02</p>
+        <h2>OpenEnv ready</h2>
+        <p>The interface is built directly on top of the typed environment endpoints instead of a disconnected mockup.</p>
+      </article>
+      <article class="highlight-card">
+        <p class="card-index">03</p>
+        <h2>Judging visibility</h2>
+        <p>Task ladder, queue pressure, partial score, and reward breakdown stay visible while you step through the run.</p>
+      </article>
+      <article class="highlight-card">
+        <p class="card-index">04</p>
+        <h2>Simple demo flow</h2>
+        <p>Pick a task, reset the episode, compose an action, and inspect logs or raw state when you need proof.</p>
+      </article>
+    </section>
+
+    <main class="workspace" id="workspace">
+      <section class="panel session-panel reveal" id="controls-card">
+        <div class="panel-head">
+          <div>
+            <p class="section-label">Session</p>
+            <h2>Run an episode</h2>
+          </div>
+          <div id="status" class="status status-idle">Idle</div>
+        </div>
+
+        <div class="grid-2">
+          <label>
+            <span>Task</span>
+            <select id="task-select">
+              <option value="bug_triage_easy">bug_triage_easy</option>
+              <option value="bug_triage_medium">bug_triage_medium</option>
+              <option value="bug_triage_hard">bug_triage_hard</option>
+            </select>
+          </label>
+          <label>
+            <span>Seed</span>
+            <input id="seed-input" type="number" value="42" min="0" step="1" />
+          </label>
+        </div>
+
+        <div class="button-row">
+          <button id="reset-btn" class="btn btn-primary">Reset</button>
+          <button id="state-btn" class="btn btn-secondary">State</button>
+        </div>
+
+        <div class="metric-grid">
+          <article>
+            <span>Steps used</span>
+            <strong id="steps-used">0</strong>
+          </article>
+          <article>
+            <span>Remaining</span>
+            <strong id="steps-remaining">0</strong>
+          </article>
+          <article>
+            <span>Queue left</span>
+            <strong id="queue-remaining">0</strong>
+          </article>
+          <article>
+            <span>Urgent</span>
+            <strong id="urgent-count">0</strong>
+          </article>
+          <article>
+            <span>SLA risk</span>
+            <strong id="sla-count">0</strong>
+          </article>
+          <article>
+            <span>Partial score</span>
+            <strong id="partial-score">0.00</strong>
+          </article>
+          <article>
+            <span>Cumulative reward</span>
+            <strong id="cumulative-reward">0.00</strong>
+          </article>
+          <article>
+            <span>Episode</span>
+            <strong id="done-flag">idle</strong>
+          </article>
+        </div>
+      </section>
+
+      <section class="panel task-panel reveal">
+        <div class="panel-head">
+          <div>
+            <p class="section-label">Tasks</p>
+            <h2>Difficulty ladder</h2>
+          </div>
+          <p class="muted-copy">All tasks score from 0.0 to 1.0 and share the same environment API.</p>
+        </div>
+
+        <div id="task-cards" class="task-cards"></div>
+        <div id="task-brief" class="task-brief"></div>
+      </section>
+
+      <section class="panel ticket-panel reveal" id="ticket-card">
+        <div class="panel-head">
+          <div>
+            <p class="section-label">Observation</p>
+            <h2>Current ticket</h2>
+          </div>
+          <p id="ticket-meta" class="muted-copy">Run reset to load a task.</p>
+        </div>
+
+        <div class="ticket-card-shell">
+          <div class="ticket-top">
+            <h3 id="ticket-title">Waiting for a reset</h3>
+            <div id="ticket-summary" class="token-row"></div>
+          </div>
+
+          <p id="ticket-description" class="ticket-description">
+            Pick one of the graded tasks, reset the environment, and the focused ticket will appear here.
+          </p>
+
+          <div class="fact-grid">
+            <article class="fact-block">
+              <h3>Component hints</h3>
+              <div id="ticket-components" class="token-row"></div>
+            </article>
+            <article class="fact-block">
+              <h3>Duplicate hints</h3>
+              <div id="ticket-duplicates" class="token-row"></div>
+            </article>
+            <article class="fact-block">
+              <h3>Evidence</h3>
+              <div id="ticket-evidence" class="token-row"></div>
+            </article>
+            <article class="fact-block">
+              <h3>Last action result</h3>
+              <p id="last-action-result" class="fact-copy">No action taken yet.</p>
+            </article>
+          </div>
+        </div>
+
+        <details class="details-block">
+          <summary>Raw observation JSON</summary>
+          <pre id="ticket-body" class="json-view">{}</pre>
+        </details>
+      </section>
+
+      <section class="panel action-panel reveal" id="action-card">
+        <div class="panel-head">
+          <div>
+            <p class="section-label">Step</p>
+            <h2>Action builder</h2>
+          </div>
+          <p class="muted-copy">Compose a typed action and send it directly to <code>/step</code>.</p>
+        </div>
+
         <label>
-          <span>Task</span>
-          <select id="task-select">
-            <option value="bug_triage_easy">bug_triage_easy</option>
-            <option value="bug_triage_medium">bug_triage_medium</option>
-            <option value="bug_triage_hard">bug_triage_hard</option>
+          <span>Action type</span>
+          <select id="action-type">
+            <option value="classify">classify</option>
+            <option value="assign">assign</option>
+            <option value="mark_duplicate">mark_duplicate</option>
+            <option value="request_info">request_info</option>
+            <option value="defer">defer</option>
+            <option value="close">close</option>
+            <option value="escalate_incident">escalate_incident</option>
+            <option value="next_ticket">next_ticket</option>
           </select>
         </label>
-        <label>
-          <span>Seed</span>
-          <input id="seed-input" type="number" value="42" min="0" step="1" />
-        </label>
-      </div>
-      <div class="button-row">
-        <button id="reset-btn" class="btn btn-accent">Reset Episode</button>
-        <button id="state-btn" class="btn btn-ghost">Fetch State</button>
-      </div>
-      <div id="status" class="status status-idle">Idle</div>
-      <div class="summary-grid">
-        <article>
-          <h3>Steps</h3>
-          <p id="steps-used">0</p>
-        </article>
-        <article>
-          <h3>Remaining</h3>
-          <p id="steps-remaining">0</p>
-        </article>
-        <article>
-          <h3>Done</h3>
-          <p id="done-flag">false</p>
-        </article>
-        <article>
-          <h3>Cumulative</h3>
-          <p id="cumulative-reward">0.00</p>
-        </article>
-      </div>
-    </section>
 
-    <section class="card reveal" id="ticket-card">
-      <h2>Current Ticket</h2>
-      <div id="ticket-meta" class="ticket-meta">Run reset to load a task.</div>
-      <pre id="ticket-body" class="json-view">{}</pre>
-    </section>
+        <div id="payload-fields" class="payload-grid"></div>
+        <div id="action-hint" class="hint-box">Choose an action to see payload guidance.</div>
 
-    <section class="card reveal" id="action-card">
-      <h2>Action Composer</h2>
-      <label>
-        <span>Action Type</span>
-        <select id="action-type">
-          <option value="classify">classify</option>
-          <option value="assign">assign</option>
-          <option value="mark_duplicate">mark_duplicate</option>
-          <option value="request_info">request_info</option>
-          <option value="defer">defer</option>
-          <option value="close">close</option>
-          <option value="escalate_incident">escalate_incident</option>
-          <option value="next_ticket">next_ticket</option>
-        </select>
-      </label>
-      <div id="payload-fields" class="payload-grid"></div>
-      <div class="button-row">
-        <button id="step-btn" class="btn btn-hot">Step</button>
-      </div>
-      <pre id="action-preview" class="json-view">{"action_type":"classify"}</pre>
-    </section>
+        <div class="button-row">
+          <button id="step-btn" class="btn btn-accent">Submit step</button>
+        </div>
 
-    <section class="card reveal" id="logs-card">
-      <h2>Episode Log</h2>
-      <ol id="step-log" class="log-list"></ol>
-    </section>
+        <div class="preview-card">
+          <div class="preview-head">
+            <h3>Action preview</h3>
+            <span>Typed payload</span>
+          </div>
+          <pre id="action-preview" class="json-view">{"action_type":"classify"}</pre>
+        </div>
+      </section>
 
-    <section class="card reveal" id="state-card">
-      <h2>State Snapshot</h2>
-      <pre id="state-json" class="json-view">{}</pre>
-    </section>
-  </main>
+      <section class="panel log-panel reveal" id="logs-card">
+        <div class="panel-head">
+          <div>
+            <p class="section-label">Trajectory</p>
+            <h2>Episode timeline</h2>
+          </div>
+          <p class="muted-copy">Rewards, validation feedback, and action history stay readable during demos.</p>
+        </div>
+
+        <div class="log-layout">
+          <article class="reward-card">
+            <h3>Last reward breakdown</h3>
+            <ul id="reward-breakdown" class="breakdown-list"></ul>
+          </article>
+          <ol id="step-log" class="log-list"></ol>
+        </div>
+      </section>
+
+      <section class="panel state-panel reveal" id="state-card">
+        <div class="panel-head">
+          <div>
+            <p class="section-label">State</p>
+            <h2>Environment contract</h2>
+          </div>
+          <p class="muted-copy">Use this pane to show that the environment is real, typed, and inspectable.</p>
+        </div>
+
+        <div class="state-layout">
+          <article class="api-card">
+            <h3>OpenEnv checklist</h3>
+            <ul class="mini-list">
+              <li>Typed observation, action, and reward models</li>
+              <li>Standard <code>reset()</code>, <code>step()</code>, and <code>state()</code> flow</li>
+              <li>Three deterministic tasks with agent graders</li>
+              <li>Reward signals for partial progress, not just terminal success</li>
+              <li>Ready for Docker and Hugging Face Spaces demos</li>
+            </ul>
+          </article>
+
+          <article class="api-card">
+            <h3>Live state snapshot</h3>
+            <pre id="state-json" class="json-view">{}</pre>
+          </article>
+        </div>
+      </section>
+    </main>
+  </div>
 
   <script src="/ui/app.js"></script>
 </body>
 </html>
-
