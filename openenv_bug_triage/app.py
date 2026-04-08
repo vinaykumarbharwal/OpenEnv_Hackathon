@@ -85,6 +85,7 @@ def favicon() -> Response:
 
 
 @app.get("/health")
+@app.get("/openenv/health")
 def health() -> dict[str, str]:
     return {
         "status": "ok",
@@ -94,6 +95,7 @@ def health() -> dict[str, str]:
 
 
 @app.get("/tasks")
+@app.get("/openenv/tasks")
 def tasks() -> dict:
     registry = list_tasks()
     return {
@@ -136,6 +138,7 @@ def suggest_current_action() -> dict:
 
 
 @app.get("/reset")
+@app.get("/openenv/reset")
 def reset_get(task_id: Optional[str] = None, seed: Optional[int] = None) -> dict:
     """Validator-friendly reset endpoint (GET)."""
     try:
@@ -146,6 +149,7 @@ def reset_get(task_id: Optional[str] = None, seed: Optional[int] = None) -> dict
 
 
 @app.post("/reset")
+@app.post("/openenv/reset")
 def reset_post(req: Optional[ResetRequest] = Body(default=None)) -> dict:
     """Typed reset endpoint (POST), compatible with empty-body validator calls."""
     task_id = req.task_id if req is not None else None
@@ -158,6 +162,7 @@ def reset_post(req: Optional[ResetRequest] = Body(default=None)) -> dict:
 
 
 @app.post("/step")
+@app.post("/openenv/step")
 def step(req: StepRequest) -> dict:
     try:
         observation, reward, done, info = env.step(req.action)
@@ -173,6 +178,7 @@ def step(req: StepRequest) -> dict:
 
 
 @app.get("/state")
+@app.get("/openenv/state")
 def state() -> dict:
     if env.current_task is None:
         return {

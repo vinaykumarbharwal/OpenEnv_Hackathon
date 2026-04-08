@@ -40,3 +40,12 @@ def test_suggest_action_returns_typed_action_for_active_ticket():
         "escalate_incident",
         "next_ticket",
     }
+
+
+def test_openenv_reset_post_accepts_empty_body():
+    response = client.post("/openenv/reset")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "current_ticket" in payload
+    assert "steps_remaining" in payload
