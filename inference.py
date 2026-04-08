@@ -9,7 +9,7 @@ Mandatory environment variables:
 Stdout contract:
 - [START] task=<task_name> env=<benchmark> model=<model_name>
 - [STEP]  step=<n> action=<action_str> reward=<0.00> done=<true|false> error=<msg|null>
-- [END]   success=<true|false> steps=<n> rewards=<r1,r2,...,rn>
+- [END]   success=<true|false> steps=<n> score=<0.xxxx> rewards=<r1,r2,...,rn>
 """
 
 from __future__ import annotations
@@ -126,6 +126,11 @@ def _as_bool(value: str | None) -> bool:
 
 def _sanitize(text: str) -> str:
     return " ".join(str(text).replace("\n", " ").replace("\r", " ").split())
+
+
+def _strict_unit_interval(value: float, eps: float = 1e-6) -> float:
+    """Clamp numeric scores to the strict open interval (0, 1)."""
+    return max(eps, min(1.0 - eps, float(value)))
 
 
 def _action_to_log(action: ActionModel) -> str:
@@ -505,6 +510,7 @@ def _run_task(task_id: str, env: BugTriageEnv, client: OpenAI | None) -> None:
     step_no = 0
     rewards: list[str] = []
     success = False
+    score = 0.5
 
     api_disabled = False
     plans: dict[str, dict] = {}
@@ -575,9 +581,18 @@ def _run_task(task_id: str, env: BugTriageEnv, client: OpenAI | None) -> None:
                 ground_truths=ground_truths,
                 metrics=info.get("metrics", {}) if isinstance(info, dict) else {},
             )
+            score = _strict_unit_interval(grader_result.score)
             success = bool(grader_result.passed)
         except Exception:
             success = bool(done)
+            parsed_rewards: list[float] = []
+            for reward_text in rewards:
+                try:
+                    parsed_rewards.append(float(reward_text))
+                except ValueError:
+                    continue
+            avg_reward = (sum(parsed_rewards) / len(parsed_rewards)) if parsed_rewards else 0.5
+            score = _strict_unit_interval(avg_reward)
     finally:
         if hasattr(env, "close"):
             try:
@@ -586,7 +601,7 @@ def _run_task(task_id: str, env: BugTriageEnv, client: OpenAI | None) -> None:
                 pass
 
         rewards_csv = ",".join(rewards)
-        print(f"[END] success={_b(success)} steps={step_no} rewards={rewards_csv}")
+        print(f"[END] success={_b(success)} steps={step_no} score={score:.6f} rewards={rewards_csv}")
 
 
 def main() -> int:

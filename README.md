@@ -21,7 +21,7 @@ The environment includes:
 - Typed `Observation`, `Action`, `Reward`, and `State` models with Pydantic
 - Standard OpenEnv methods: `reset()`, `step()`, and `state()`
 - Three deterministic tasks: easy, medium, and hard
-- Programmatic graders with scores in `[0.0, 1.0]`
+- Programmatic graders with final task scores strictly in `(0, 1)`
 - Dense rewards for partial progress
 
 ## Observation and action space
@@ -85,6 +85,10 @@ It penalizes:
 - Incorrect close or defer decisions
 
 Each task has a deterministic grader in `openenv_bug_triage/grader.py`.
+For validator compatibility, final task scores are epsilon-clamped to a strict open interval:
+
+- minimum: `> 0.0`
+- maximum: `< 1.0`
 
 ## Setup
 
@@ -125,7 +129,7 @@ uvicorn server.app:app --host 0.0.0.0 --port 7860
 Main endpoints:
 
 - `GET /reset`
-- `POST /reset`
+- `POST /reset` (accepts empty body and optional JSON body)
 - `POST /step`
 - `GET /state`
 - `GET /tasks`
@@ -156,6 +160,10 @@ Current offline baseline scores:
 | Mean | `0.7698` |
 
 The score artifact is saved to `artifacts/baseline_scores.json`.
+
+Submission check note:
+
+- Ensure every task score is strictly between `0` and `1` (not exactly `0.0` or `1.0`).
 
 ## Docker and Hugging Face
 

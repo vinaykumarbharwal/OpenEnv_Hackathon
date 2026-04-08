@@ -16,6 +16,7 @@ class GraderResult(BaseModel):
 
 class BugTriageGrader:
     """Deterministic grader for bug triage episodes."""
+    SCORE_EPSILON = 1e-6
     
     def __init__(self, task_id: str, threshold: float = 0.75):
         self.task_id = task_id
@@ -25,6 +26,11 @@ class BugTriageGrader:
     @staticmethod
     def _clamp01(value: float) -> float:
         return max(0.0, min(1.0, value))
+
+    def _strict_unit_interval(self, value: float) -> float:
+        """Clamp to a strict open interval (0, 1) for validator compatibility."""
+        clamped = self._clamp01(value)
+        return max(self.SCORE_EPSILON, min(1.0 - self.SCORE_EPSILON, clamped))
 
     def _safe_ratio(self, numerator: float, denominator: float, default: float = 1.0) -> float:
         if denominator <= 0:
@@ -106,8 +112,8 @@ class BugTriageGrader:
             for key, weight in self.weights.items()
         )
         
-        # Clamp to [0, 1]
-        final_score = max(0.0, min(1.0, final_score))
+        # Keep final task score strictly in (0, 1) for submission validators.
+        final_score = self._strict_unit_interval(final_score)
         
         passed = final_score >= self.threshold
         
