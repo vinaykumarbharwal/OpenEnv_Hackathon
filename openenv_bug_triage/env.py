@@ -39,6 +39,20 @@ class BugTriageEnv:
         
         # Metrics for grading
         self.metrics = {}
+        self._critical_ticket_ids: set[str] = set()
+        self._duplicate_ticket_ids: set[str] = set()
+        self._info_needed_ticket_ids: set[str] = set()
+        self._severity_scored_tickets: set[str] = set()
+        self._critical_severity_scored_tickets: set[str] = set()
+        self._priority_scored_tickets: set[str] = set()
+        self._component_scored_tickets: set[str] = set()
+        self._team_scored_tickets: set[str] = set()
+        self._duplicate_scored_tickets: set[str] = set()
+        self._info_request_scored_tickets: set[str] = set()
+        self._escalated_ticket_ids: set[str] = set()
+        self._escalation_scored_tickets: set[str] = set()
+        self._sla_met_ticket_ids: set[str] = set()
+        self._missed_critical_ticket_ids: set[str] = set()
     
     def reset(
         self,
@@ -85,6 +99,35 @@ class BugTriageEnv:
         # Reset reward calculator
         self.reward_calculator.reset()
         
+        self._critical_ticket_ids = {
+            gt.ticket_id for gt in self.current_task.ground_truths
+            if gt.true_severity in ["sev0", "sev1"]
+        }
+        self._duplicate_ticket_ids = {
+            gt.ticket_id for gt in self.current_task.ground_truths
+            if gt.duplicate_of is not None
+        }
+        self._info_needed_ticket_ids = {
+            gt.ticket_id for gt in self.current_task.ground_truths
+            if gt.needs_more_info
+        }
+        self._severity_scored_tickets = set()
+        self._critical_severity_scored_tickets = set()
+        self._priority_scored_tickets = set()
+        self._component_scored_tickets = set()
+        self._team_scored_tickets = set()
+        self._duplicate_scored_tickets = set()
+        self._info_request_scored_tickets = set()
+        self._escalated_ticket_ids = set()
+        self._escalation_scored_tickets = set()
+        self._sla_met_ticket_ids = set()
+        self._missed_critical_ticket_ids = set()
+
+        label_total = sum(
+            1 for gt in self.current_task.ground_truths
+            if gt.duplicate_of is None
+        )
+
         # Initialize metrics
         self.metrics = {
             "severity_correct": 0,
@@ -93,18 +136,23 @@ class BugTriageEnv:
             "team_correct": 0,
             "duplicate_correct": 0,
             "duplicate_total": 0,
+            "duplicate_expected_total": len(self._duplicate_ticket_ids),
             "info_request_correct": 0,
-            "info_needed_total": 0,
+            "info_needed_total": len(self._info_needed_ticket_ids),
             "major_mistakes": 0,
             "incorrect_close_count": 0,
             "critical_severity_correct": 0,
-            "critical_severity_total": 0,
+            "critical_severity_total": len(self._critical_ticket_ids),
             "sla_met": 0,
-            "sla_total": 0,
+            "sla_total": len(self._critical_ticket_ids),
             "escalation_correct": 0,
-            "escalation_total": 0,
+            "escalation_total": len(self._critical_ticket_ids),
             "destructive_actions": 0,
             "missed_critical_escalation": 0,
+            "steps_used": 0,
+            "step_budget": self.current_task.step_budget,
+            "label_total": label_total,
+            "assignment_total": label_total,
         }
         
         return self._get_observation()
@@ -147,10 +195,13 @@ class BugTriageEnv:
         
         self.cumulative_reward += step_reward
         self.steps_used += 1
+        self.metrics["steps_used"] = self.steps_used
         
         # Update metrics based on action
         if is_valid:
-            self._update_metrics(action, ground_truth)
+            self._update_metrics(action, ground_truth, current_ticket.ticket_id)
+        else:
+            self.metrics["major_mistakes"] += 1
         
         # Update ticket state
         self.ticket_states[self.current_ticket_index]["actions_taken"].append(
@@ -240,7 +291,7 @@ class BugTriageEnv:
             total_tickets=len(self.current_task.tickets),
             tickets_state=ticket_states,
             steps_used=self.steps_used,
-            steps_remaining=self.current_task.step_budget - self.steps_used,
+            steps_remaining=max(0, self.current_task.step_budget - self.steps_used),
             cumulative_reward=self.cumulative_reward,
             episode_done=self.episode_done,
         )
@@ -290,7 +341,7 @@ class BugTriageEnv:
             available_teams=self.current_task.available_teams,
             available_components=self.current_task.available_components,
             steps_used=self.steps_used,
-            steps_remaining=self.current_task.step_budget - self.steps_used,
+            steps_remaining=max(0, self.current_task.step_budget - self.steps_used),
             partial_score=self._calculate_partial_score(),
         )
     
@@ -350,47 +401,76 @@ class BugTriageEnv:
         
         return "Action executed"
     
-    def _update_metrics(self, action: ActionModel, ground_truth):
+    def _update_metrics(self, action: ActionModel, ground_truth, ticket_id: str):
         """Update metrics for grading."""
-        if action.action_type == "classify" and action.classify:
+        is_duplicate_ticket = ground_truth.duplicate_of is not None
+        is_critical_ticket = ground_truth.true_severity in ["sev0", "sev1"]
+
+        if is_critical_ticket and action.action_type in ["classify", "mark_duplicate", "escalate_incident"]:
+            if ticket_id not in self._sla_met_ticket_ids:
+                self._sla_met_ticket_ids.add(ticket_id)
+                self.metrics["sla_met"] += 1
+
+        if action.action_type == "classify" and action.classify and not is_duplicate_ticket:
             if action.classify.severity == ground_truth.true_severity:
-                self.metrics["severity_correct"] += 1
-                if ground_truth.true_severity in ["sev0", "sev1"]:
+                if ticket_id not in self._severity_scored_tickets:
+                    self._severity_scored_tickets.add(ticket_id)
+                    self.metrics["severity_correct"] += 1
+
+                if is_critical_ticket and ticket_id not in self._critical_severity_scored_tickets:
+                    self._critical_severity_scored_tickets.add(ticket_id)
                     self.metrics["critical_severity_correct"] += 1
-            
-            if ground_truth.true_severity in ["sev0", "sev1"]:
-                self.metrics["critical_severity_total"] += 1
-            
+
             if action.classify.priority == ground_truth.true_priority:
-                self.metrics["priority_correct"] += 1
-            
+                if ticket_id not in self._priority_scored_tickets:
+                    self._priority_scored_tickets.add(ticket_id)
+                    self.metrics["priority_correct"] += 1
+
             if action.classify.component == ground_truth.true_component:
-                self.metrics["component_correct"] += 1
-        
-        if action.action_type == "assign" and action.assign:
+                if ticket_id not in self._component_scored_tickets:
+                    self._component_scored_tickets.add(ticket_id)
+                    self.metrics["component_correct"] += 1
+
+        if action.action_type == "assign" and action.assign and not is_duplicate_ticket:
             if action.assign.team == ground_truth.true_assignee_team:
-                self.metrics["team_correct"] += 1
-        
+                if ticket_id not in self._team_scored_tickets:
+                    self._team_scored_tickets.add(ticket_id)
+                    self.metrics["team_correct"] += 1
+
         if action.action_type == "mark_duplicate" and action.mark_duplicate:
             self.metrics["duplicate_total"] += 1
-            if ground_truth.duplicate_of == action.mark_duplicate.canonical_ticket_id:
+            if (
+                ground_truth.duplicate_of == action.mark_duplicate.canonical_ticket_id
+                and ticket_id not in self._duplicate_scored_tickets
+            ):
+                self._duplicate_scored_tickets.add(ticket_id)
                 self.metrics["duplicate_correct"] += 1
-        
+
         if action.action_type == "request_info" and ground_truth.needs_more_info:
-            self.metrics["info_request_correct"] += 1
-        
-        if ground_truth.needs_more_info:
-            self.metrics["info_needed_total"] += 1
-        
+            if ticket_id not in self._info_request_scored_tickets:
+                self._info_request_scored_tickets.add(ticket_id)
+                self.metrics["info_request_correct"] += 1
+
         if action.action_type in ["close", "defer"]:
             if not ground_truth.duplicate_of and ground_truth.needs_more_info:
                 self.metrics["incorrect_close_count"] += 1
                 self.metrics["destructive_actions"] += 1
-        
+
         if action.action_type == "escalate_incident":
-            self.metrics["escalation_total"] += 1
-            if ground_truth.true_severity in ["sev0", "sev1"]:
-                self.metrics["escalation_correct"] += 1
+            if is_critical_ticket:
+                self._escalated_ticket_ids.add(ticket_id)
+                if ticket_id not in self._escalation_scored_tickets:
+                    self._escalation_scored_tickets.add(ticket_id)
+                    self.metrics["escalation_correct"] += 1
+
+        if (
+            action.action_type == "next_ticket"
+            and is_critical_ticket
+            and ticket_id not in self._escalated_ticket_ids
+            and ticket_id not in self._missed_critical_ticket_ids
+        ):
+            self._missed_critical_ticket_ids.add(ticket_id)
+            self.metrics["missed_critical_escalation"] += 1
     
     def _check_done(self):
         """Check if episode should end."""

@@ -3,6 +3,17 @@
 
 A real-world simulation environment for software bug triage workflows, implementing the OpenEnv specification.
 
+## At a Glance
+
+| Property | Value |
+|---|---|
+| Domain | Real-world software bug triage |
+| Tasks | 3 deterministic tasks |
+| Difficulties | easy -> medium -> hard |
+| Reward Range | 0.0 - 1.0 |
+| API | `/reset`, `/step`, `/state`, `/health`, `/tasks` |
+| Deployment | Docker + Hugging Face Spaces |
+
 ## Overview
 
 This environment simulates a realistic bug triage workflow where an AI agent acts as a triage engineer responsible for:
@@ -148,32 +159,53 @@ Rewards are in range `[0.0, 1.0]` per step, with a base reward of 0.50 for any v
    docker run --rm -p 7860:7860 bug-triage-openenv
    ```
 
+### Hugging Face Style Server Dockerfile
+
+This repo also includes a `server/Dockerfile` so the deployment layout can mirror the reference Space more closely:
+
+```bash
+docker build -f server/Dockerfile -t bug-triage-openenv .
+docker run --rm -p 7860:7860 bug-triage-openenv
+```
+
 ## Usage
 
 ### Submission Inference (Mandatory)
 
 For submission, use the root script `inference.py` (not `scripts/baseline_inference.py`).
-It uses the OpenAI client with these required environment variables:
+It uses the OpenAI client and supports the standard `OPENAI_API_KEY` environment variable required by the Round 1 problem statement.
+It also accepts `HF_TOKEN` as a backward-compatible alias for OpenAI-compatible routers.
 
-- `API_BASE_URL` (for Groq: `https://api.groq.com/openai/v1`)
-- `MODEL_NAME` (for example `llama-3.3-70b-versatile`)
-- `HF_TOKEN` (set this to your Groq API key)
+Required environment variables:
+
+- `API_BASE_URL` (for OpenAI: `https://api.openai.com/v1`)
+- `MODEL_NAME` (for example `gpt-5-mini`)
+- `OPENAI_API_KEY` (or `HF_TOKEN` for backward compatibility)
 
 Example:
 
 ```bash
 # Linux/macOS
-export API_BASE_URL="https://api.groq.com/openai/v1"
-export MODEL_NAME="llama-3.3-70b-versatile"
-export HF_TOKEN="<your-groq-key>"
+export API_BASE_URL="https://api.openai.com/v1"
+export MODEL_NAME="gpt-5-mini"
+export OPENAI_API_KEY="<your-openai-key>"
 python inference.py
 ```
 
 ```powershell
 # Windows PowerShell
-$env:API_BASE_URL = "https://api.groq.com/openai/v1"
-$env:MODEL_NAME = "llama-3.3-70b-versatile"
-$env:HF_TOKEN = "<your-groq-key>"
+$env:API_BASE_URL = "https://api.openai.com/v1"
+$env:MODEL_NAME = "gpt-5-mini"
+$env:OPENAI_API_KEY = "<your-openai-key>"
+python .\inference.py
+```
+
+OpenAI-compatible router example:
+
+```powershell
+$env:API_BASE_URL = "https://router.huggingface.co/v1"
+$env:MODEL_NAME = "Qwen/Qwen2.5-72B-Instruct"
+$env:OPENAI_API_KEY = "<your-hf-router-token>"
 python .\inference.py
 ```
 
@@ -190,7 +222,16 @@ The app now ships with a dark-mode web console for interactive triage testing.
 
 - Local: run `uvicorn openenv_bug_triage.app:app --host 0.0.0.0 --port 7860`
 - Open in browser: `http://localhost:7860/`
-- Uses API endpoints: `GET/POST /reset`, `POST /step`, `GET /state`
+- Uses API endpoints: `GET/POST /reset`, `POST /step`, `GET /state`, `GET /tasks`, `GET /health`
+
+### Space-Style Server Entrypoint
+
+To match the reference Space layout, the project also exposes:
+
+```bash
+uvicorn server.app:app --host 0.0.0.0 --port 7860
+```
+
 ### Running Baseline Inference
 
 The baseline script runs all three tasks using an OpenAI-compatible API.
@@ -292,6 +333,11 @@ This validates:
 
 ```
 openenv-bug-triage/
+  server/                     # HF-style deployment wrappers
+    __init__.py
+    app.py                    # Server entrypoint wrapper
+    environment.py            # Server-facing environment exports
+    Dockerfile                # Alternate HF-style Docker build
   openenv_bug_triage/          # Main package
     __init__.py                # Package exports
     env.py                     # Environment implementation
@@ -312,6 +358,7 @@ openenv-bug-triage/
     test_determinism.py       # Reproducibility tests
   openenv.yaml                # Environment metadata
   Dockerfile                  # Container definition
+  pyproject.toml              # Project metadata / scripts
   requirements.txt            # Python dependencies
   README.md                   # This file
 ```
@@ -354,3 +401,11 @@ Built according to the OpenEnv specification for creating reproducible, real-wor
 
 
 
+---
+title: Bug Triage OpenEnv
+emoji: 🐞
+colorFrom: blue
+colorTo: green
+sdk: docker
+pinned: false
+---

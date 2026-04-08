@@ -231,6 +231,8 @@ function renderObservation(obs) {
   if (!obs || !obs.current_ticket) {
     els.ticketMeta.textContent = "No active ticket";
     els.ticketBody.textContent = "{}";
+    els.stepsUsed.textContent = "0";
+    els.stepsRemaining.textContent = "0";
     return;
   }
 
@@ -328,6 +330,10 @@ async function fetchState() {
   try {
     const state = await api("/state", "GET");
     els.stateJson.textContent = pretty(state);
+    if (state.initialized === false) {
+      setStatus("Server ready. Reset to load a task.", "idle");
+      return;
+    }
     setStatus("State fetched.", "ok");
   } catch (err) {
     setStatus(`State fetch failed: ${err.message}`, "error");
@@ -347,5 +353,6 @@ els.stateBtn.addEventListener("click", fetchState);
 
 renderPayloadFields();
 renderPreview();
-setStatus("Idle", "idle");
+setStatus("Loading server state...", "idle");
+fetchState();
 
