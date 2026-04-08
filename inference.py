@@ -16,11 +16,11 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from collections import defaultdict
 from pathlib import Path
 
-from dotenv import load_dotenv
 from openai import OpenAI
 
 # Make package importable when run from repo root.
@@ -33,11 +33,30 @@ from openenv_bug_triage.grader import BugTriageGrader
 from openenv_bug_triage.models import ActionModel
 
 
-load_dotenv()
+def _load_simple_env_file(dotenv_path: Path) -> None:
+    """Load simple KEY=VALUE lines without failing on stray shell commands."""
+    if not dotenv_path.exists():
+        return
 
-API_BASE_URL = os.getenv("API_BASE_URL", "https://api.groq.com/openai/v1")
-MODEL_NAME = os.getenv("MODEL_NAME", "llama-3.3-70b-versatile")
+    for raw_line in dotenv_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key:
+            os.environ.setdefault(key, value)
+
+
+_load_simple_env_file(PROJECT_ROOT / ".env")
+
 HF_TOKEN = os.getenv("HF_TOKEN")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
+MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
+API_KEY = HF_TOKEN or OPENAI_API_KEY
 
 BENCHMARK = os.getenv("OPENENV_BENCHMARK", "bug-triage-openenv")
 TASKS = [
@@ -68,9 +87,41 @@ COMPONENT_TEAM_MAP = {
     "cdn": "infrastructure",
 }
 
+COMPONENT_KEYWORDS = {
+    "api-gateway": ("api gateway", "gateway", "edge", "proxy", "routing", "/api/"),
+    "auth-service": ("auth", "authentication", "login", "signin", "token", "session"),
+    "user-service": ("user service", "users endpoint", "profile", "identity", "account"),
+    "payment-service": ("payment", "checkout", "charge", "billing", "tax", "order"),
+    "web-app": ("web app", "web-app", "browser", "dashboard", "frontend", "page"),
+    "ios-app": ("ios", "iphone", "ipad", "apple"),
+    "android-app": ("android",),
+    "database": ("database", "query", "sql", "db", "index"),
+    "cache": ("cache", "redis", "memcache"),
+    "cdn": ("cdn", "image", "asset", "static content"),
+}
+
+SERVICE_COMPONENT_HINTS = {
+    "api": ("api-gateway", "user-service"),
+    "auth": ("auth-service",),
+    "identity": ("user-service",),
+    "payments": ("payment-service",),
+    "web-app": ("web-app", "cdn", "database", "cache"),
+    "mobile-app": ("ios-app", "android-app", "auth-service"),
+}
+
+
+class ActionParseError(ValueError):
+    """Raised when a model response cannot be converted into a valid action."""
+
 
 def _b(value: bool) -> str:
     return "true" if value else "false"
+
+
+def _as_bool(value: str | None) -> bool:
+    if value is None:
+        return False
+    return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _sanitize(text: str) -> str:
@@ -91,24 +142,127 @@ def _severity_to_priority(severity: str) -> str:
     }.get(severity, "p2")
 
 
+def _ticket_text(ticket) -> str:
+    return " ".join(
+        str(part)
+        for part in (
+            ticket.title,
+            ticket.description,
+            ticket.service,
+            " ".join(ticket.component_candidates),
+        )
+    ).lower()
+
+
 def _infer_component(ticket, available_components: list[str]) -> str:
-    for candidate in ticket.component_candidates:
-        if candidate in available_components:
-            return candidate
-    return available_components[0] if available_components else "api-gateway"
+    candidates = [c for c in ticket.component_candidates if c in available_components]
+    if not candidates:
+        return available_components[0] if available_components else "api-gateway"
+
+    text = _ticket_text(ticket)
+    service_hints = SERVICE_COMPONENT_HINTS.get(ticket.service, ())
+    best_candidate = candidates[0]
+    best_score = -1
+
+    for index, candidate in enumerate(candidates):
+        score = 0
+        score += max(0, 3 - index)
+
+        if candidate in service_hints:
+            score += 3
+
+        normalized = candidate.replace("-", " ")
+        if normalized in text:
+            score += 4
+
+        for keyword in COMPONENT_KEYWORDS.get(candidate, ()):
+            if keyword in text:
+                score += 3
+
+        if candidate == "ios-app" and "login" in text:
+            score += 1
+        if candidate == "payment-service" and "gateway" in text:
+            score += 1
+        if candidate == "database" and "slow" in text:
+            score += 1
+
+        if score > best_score:
+            best_score = score
+            best_candidate = candidate
+
+    return best_candidate
 
 
-def _infer_severity(ticket) -> str:
-    text = f"{ticket.title} {ticket.description}".lower()
-    if any(k in text for k in ["security", "unauthorized", "double charge", "data loss"]):
+def _infer_severity(ticket, component: str) -> str:
+    text = _ticket_text(ticket)
+    synthetic_high_signal = "signal quality is high" in text
+    synthetic_low_signal = "signal quality is low" in text
+
+    if any(k in text for k in ["security", "unauthorized", "double charge", "data loss", "corrupt"]):
         return "sev0"
-    if ticket.reporter_type == "monitoring" or any(
-        k in text for k in ["500", "503", "outage", "incident", "crash", "timeout"]
-    ):
+
+    if any(k in text for k in ["500 internal server error", "null pointer exception", "multiple monitoring alerts"]):
+        if ticket.reporter_type == "monitoring" and ticket.customer_tier == "enterprise":
+            return "sev0"
+
+    if synthetic_high_signal and ticket.reporter_type == "monitoring" and ticket.customer_tier == "enterprise":
         return "sev1"
-    if any(k in text for k in ["latency", "slow", "degraded", "error", "failed"]):
+
+    if any(k in text for k in ["timeout", "timing out", "503", "outage", "down"]):
+        return "sev1"
+
+    if synthetic_high_signal and ticket.customer_tier in {"pro", "enterprise"}:
+        return "sev1"
+
+    if "incorrect tax" in text or ("tax" in text and "wrong" in text):
+        return "sev1" if ticket.customer_tier in {"pro", "enterprise"} else "sev2"
+
+    if synthetic_low_signal:
+        return "sev3" if ticket.customer_tier == "free" else "sev2"
+
+    if any(k in text for k in ["crash", "not responding", "not working", "broken image", "wrong values"]):
         return "sev2"
+
+    if any(k in text for k in ["latency", "slow", "degraded", "error", "failed"]):
+        if component == "database" and ticket.customer_tier == "free":
+            return "sev3"
+        return "sev2"
+
     return "sev3"
+
+
+def _infer_priority(ticket, severity: str) -> str:
+    text = _ticket_text(ticket)
+
+    if severity == "sev2" and (
+        ticket.customer_tier == "enterprise"
+        or ticket.reporter_type == "monitoring"
+        or any(k in text for k in ["payment", "checkout", "tax", "cdn", "image", "shopping"])
+    ):
+        return "p1"
+
+    return _severity_to_priority(severity)
+
+
+def _needs_more_info(ticket) -> bool:
+    text = _ticket_text(ticket)
+
+    if ticket.suspected_duplicate_ids:
+        return False
+
+    if "signal quality is low" in text:
+        return True
+
+    if not ticket.repro_steps_present and not ticket.logs_present:
+        return True
+
+    if not ticket.repro_steps_present and ticket.reporter_type != "monitoring":
+        return True
+
+    if not ticket.logs_present and ticket.reporter_type in {"user", "qa"}:
+        return True
+
+    return False
 
 
 def _fallback_action(observation, plans: dict[str, dict]) -> ActionModel:
@@ -121,24 +275,20 @@ def _fallback_action(observation, plans: dict[str, dict]) -> ActionModel:
     phase = int(plan.get("phase", 0))
 
     if phase == 0:
-        suspected = ticket.suspected_duplicate_ids or []
-        if suspected:
-            plan["phase"] = 3
-            return ActionModel(
-                action_type="mark_duplicate",
-                mark_duplicate={"canonical_ticket_id": suspected[0]},
-            )
-
         component = _infer_component(ticket, observation.available_components)
-        severity = _infer_severity(ticket)
+        severity = _infer_severity(ticket, component)
+        priority = _infer_priority(ticket, severity)
+        duplicate_id = (ticket.suspected_duplicate_ids or [None])[0]
         plan["phase"] = 1
         plan["severity"] = severity
         plan["component"] = component
+        plan["duplicate_id"] = duplicate_id
+        plan["needs_more_info"] = _needs_more_info(ticket)
         return ActionModel(
             action_type="classify",
             classify={
                 "severity": severity,
-                "priority": _severity_to_priority(severity),
+                "priority": priority,
                 "component": component,
             },
         )
@@ -152,12 +302,34 @@ def _fallback_action(observation, plans: dict[str, dict]) -> ActionModel:
 
     if phase == 2:
         sev = str(plan.get("severity", "sev2"))
-        plan["phase"] = 3
+        duplicate_id = plan.get("duplicate_id")
+        if duplicate_id:
+            plan["phase"] = 3
+            return ActionModel(
+                action_type="mark_duplicate",
+                mark_duplicate={"canonical_ticket_id": str(duplicate_id)},
+            )
+
         if sev in {"sev0", "sev1"}:
+            plan["phase"] = 3
             return ActionModel(
                 action_type="escalate_incident",
-                escalate_incident={"justification": "fallback escalation"},
+                escalate_incident={"justification": "High-impact production risk detected"},
             )
+
+        if bool(plan.get("needs_more_info")):
+            plan["phase"] = 3
+            info_type = "both"
+            if ticket.repro_steps_present and not ticket.logs_present:
+                info_type = "logs"
+            elif ticket.logs_present and not ticket.repro_steps_present:
+                info_type = "repro_steps"
+            return ActionModel(
+                action_type="request_info",
+                request_info={"info_type": info_type},
+            )
+
+        plan["phase"] = 3
         return ActionModel(action_type="next_ticket", next_ticket={})
 
     return ActionModel(action_type="next_ticket", next_ticket={})
@@ -216,26 +388,118 @@ classify, assign, mark_duplicate, request_info, defer, close, escalate_incident,
 Rules:
 - Do not repeat request_info on the same ticket.
 - Avoid loops. If uncertain, use classify or next_ticket.
-- Output valid JSON only.
+- Do not include markdown fences, analysis, or <think> tags.
+- Output exactly one valid JSON object only.
 """
 
 
+def _message_to_text(content: object) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        chunks: list[str] = []
+        for item in content:
+            if isinstance(item, dict) and item.get("type") == "text":
+                chunks.append(str(item.get("text", "")))
+                continue
+
+            text_value = getattr(item, "text", None)
+            if text_value:
+                chunks.append(str(text_value))
+        return "".join(chunks)
+    return "" if content is None else str(content)
+
+
+def _extract_json_objects(text: str) -> list[str]:
+    objects: list[str] = []
+    start: int | None = None
+    depth = 0
+    in_string = False
+    escaped = False
+
+    for index, char in enumerate(text):
+        if start is None:
+            if char == "{":
+                start = index
+                depth = 1
+                in_string = False
+                escaped = False
+            continue
+
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+
+        if char == '"':
+            in_string = True
+        elif char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                objects.append(text[start:index + 1])
+                start = None
+
+    return objects
+
+
 def _parse_action(raw: str) -> ActionModel:
-    text = raw.strip()
+    text = re.sub(r"<think>.*?</think>", " ", raw, flags=re.IGNORECASE | re.DOTALL).strip()
+
+    candidates: list[str] = [text]
     if "```json" in text:
         start = text.find("```json") + 7
         end = text.find("```", start)
-        text = text[start:end].strip()
+        if end != -1:
+            candidates.append(text[start:end].strip())
     elif "```" in text:
         start = text.find("```") + 3
         end = text.find("```", start)
-        text = text[start:end].strip()
+        if end != -1:
+            candidates.append(text[start:end].strip())
 
-    data = json.loads(text)
-    return ActionModel(**data)
+    candidates.extend(_extract_json_objects(text))
+
+    seen: set[str] = set()
+    for candidate in candidates:
+        candidate = candidate.strip()
+        if not candidate or candidate in seen:
+            continue
+        seen.add(candidate)
+
+        try:
+            data = json.loads(candidate)
+            return ActionModel(**data)
+        except (json.JSONDecodeError, TypeError, ValueError):
+            continue
+
+    raise ActionParseError(f"Could not parse model action from response: {_sanitize(text[:200])}")
 
 
-def _run_task(task_id: str, env: BugTriageEnv, client: OpenAI) -> None:
+def _request_model_action(client: OpenAI, observation) -> ActionModel:
+    response = client.chat.completions.create(
+        model=MODEL_NAME,
+        messages=[
+            {
+                "role": "system",
+                "content": "You are an expert bug triage assistant. Return one JSON object only.",
+            },
+            {"role": "user", "content": _build_prompt(observation)},
+        ],
+        temperature=TEMPERATURE,
+        max_tokens=MAX_TOKENS,
+    )
+
+    raw = _message_to_text(response.choices[0].message.content)
+    return _parse_action(raw)
+
+
+def _run_task(task_id: str, env: BugTriageEnv, client: OpenAI | None) -> None:
     print(f"[START] task={task_id} env={BENCHMARK} model={MODEL_NAME}")
 
     step_no = 0
@@ -258,22 +522,11 @@ def _run_task(task_id: str, env: BugTriageEnv, client: OpenAI) -> None:
             step_no += 1
             current_ticket_id = obs.current_ticket.ticket_id if obs.current_ticket else None
 
-            if not api_disabled:
+            if client is not None and not api_disabled:
                 try:
-                    response = client.chat.completions.create(
-                        model=MODEL_NAME,
-                        messages=[
-                            {
-                                "role": "system",
-                                "content": "You are an expert bug triage assistant. Return JSON only.",
-                            },
-                            {"role": "user", "content": _build_prompt(obs)},
-                        ],
-                        temperature=TEMPERATURE,
-                        max_tokens=MAX_TOKENS,
-                    )
-                    raw = response.choices[0].message.content or ""
-                    action = _parse_action(raw)
+                    action = _request_model_action(client, obs)
+                except ActionParseError:
+                    action = _fallback_action(obs, plans)
                 except Exception:
                     api_disabled = True
                     action = _fallback_action(obs, plans)
@@ -337,11 +590,31 @@ def _run_task(task_id: str, env: BugTriageEnv, client: OpenAI) -> None:
 
 
 def main() -> int:
-    if not HF_TOKEN:
-        print("HF_TOKEN is required", file=sys.stderr)
-        return 1
+    offline_mode = _as_bool(os.getenv("OPENENV_OFFLINE"))
+    client: OpenAI | None = None
 
-    client = OpenAI(api_key=HF_TOKEN, base_url=API_BASE_URL, max_retries=0, timeout=30)
+    if not offline_mode:
+        if not API_KEY:
+            print(
+                "HF_TOKEN is required for live inference. "
+                "OPENAI_API_KEY is also accepted for direct OpenAI endpoints. "
+                "Set OPENENV_OFFLINE=1 to run the local fallback policy instead.",
+                file=sys.stderr,
+            )
+            return 1
+
+        try:
+            client = OpenAI(api_key=API_KEY, base_url=API_BASE_URL, max_retries=0, timeout=30)
+        except Exception as exc:
+            print(
+                f"Warning: failed to initialize API client ({_sanitize(exc)}). "
+                "Falling back to offline policy.",
+                file=sys.stderr,
+            )
+            client = None
+    else:
+        print("Running in offline fallback mode (OPENENV_OFFLINE=1).", file=sys.stderr)
+
     env = BugTriageEnv()
 
     for task_id in TASKS:
