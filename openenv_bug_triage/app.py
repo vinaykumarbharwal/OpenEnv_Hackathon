@@ -5,9 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -45,12 +45,20 @@ class StepRequest(BaseModel):
     action: ActionModel
 
 
-@app.get("/")
-def index():
-    """Serve the dark-mode frontend."""
+def _app_base_path(request: Request) -> str:
+    """Return proxy-aware base path without a trailing slash."""
+    root_path = (request.scope.get("root_path") or "").rstrip("/")
+    return root_path
+
+
+@app.get("/", response_class=HTMLResponse)
+def index(request: Request):
+    """Serve the frontend with proxy-aware asset URLs."""
     index_file = UI_DIR / "index.html"
     if index_file.exists():
-        return FileResponse(index_file)
+        html = index_file.read_text(encoding="utf-8")
+        html = html.replace("__APP_BASE__", _app_base_path(request))
+        return HTMLResponse(content=html)
     return {"message": "Bug Triage OpenEnv API", "docs": "/docs"}
 
 

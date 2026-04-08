@@ -34,6 +34,8 @@ const els = {
   cumulativeReward: document.getElementById("cumulative-reward"),
 };
 
+const BASE_PATH = String(window.OPENENV_BASE_PATH || "").replace(/\/$/, "");
+
 const DEFAULT_COMPONENTS = [
   "api-gateway",
   "auth-service",
@@ -537,7 +539,7 @@ function renderObservation(observation) {
     return;
   }
 
-  els.ticketMeta.textContent = `${ticket.ticket_id} · ${ticket.service} · ${formatDate(ticket.created_at)}`;
+  els.ticketMeta.textContent = `${ticket.ticket_id} - ${ticket.service} - ${formatDate(ticket.created_at)}`;
   els.ticketTitle.textContent = ticket.title;
   els.ticketDescription.textContent = ticket.description;
   els.lastActionResult.textContent = observation?.last_action_result || "No action taken yet.";
@@ -583,13 +585,16 @@ function renderObservation(observation) {
 }
 
 async function api(url, method = "GET", body = null) {
+  const normalizedUrl = url.startsWith("/")
+    ? `${BASE_PATH}${url}`
+    : `${BASE_PATH}/${url}`;
   const options = { method, headers: {} };
   if (body !== null) {
     options.headers["Content-Type"] = "application/json";
     options.body = JSON.stringify(body);
   }
 
-  const response = await fetch(url, options);
+  const response = await fetch(normalizedUrl, options);
   const data = await response.json().catch(() => null);
   if (!response.ok) {
     const message = data?.detail || `HTTP ${response.status}`;
@@ -672,7 +677,7 @@ async function doReset() {
     await fetchState({ silent: true });
 
     appendLog({
-      title: `Episode reset · ${taskId}`,
+      title: `Episode reset - ${taskId}`,
       meta: `seed=${seed}`,
       note: taskMetaById(taskId).description,
     });
@@ -723,8 +728,8 @@ async function doStep() {
     const note = validationError || result.observation?.last_action_result || "Step accepted.";
 
     appendLog({
-      title: `Step ${stepCount} · ${action.action_type}`,
-      meta: `reward=${reward.toFixed(2)} · ${done ? "completed" : "running"}`,
+      title: `Step ${stepCount} - ${action.action_type}`,
+      meta: `reward=${reward.toFixed(2)} - ${done ? "completed" : "running"}`,
       note,
       tone: validationError ? "warn" : "neutral",
     });

@@ -4,11 +4,11 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>OpenEnv Bug Triage Workspace</title>
-  <link rel="icon" href="/ui/favicon.svg" type="image/svg+xml" />
+  <link rel="icon" href="__APP_BASE__/ui/favicon.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/ui/styles.css" />
+  <link rel="stylesheet" href="__APP_BASE__/ui/styles.css" />
 </head>
 <body>
   <div class="backdrop" aria-hidden="true"></div>
@@ -16,7 +16,7 @@
   <div class="page-shell">
     <header class="hero reveal">
       <div class="hero-copy">
-        <p class="eyebrow">Round 1 · OpenEnv Submission</p>
+        <p class="eyebrow">Round 1 - OpenEnv Submission</p>
         <h1>Bug triage, shown as a clean real-world agent workspace.</h1>
         <p class="hero-text">
           This UI makes the judging story easy to follow: a real software workflow, the standard
@@ -280,6 +280,7 @@
     </main>
   </div>
 
-  <script src="/ui/app.js"></script>
+  <script>window.OPENENV_BASE_PATH = "__APP_BASE__";</script>
+  <script src="__APP_BASE__/ui/app.js"></script>
 </body>
 </html>
