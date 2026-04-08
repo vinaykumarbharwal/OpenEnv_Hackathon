@@ -21,6 +21,22 @@ class BugTriageGrader:
         self.task_id = task_id
         self.threshold = threshold
         self.weights = self._get_task_weights(task_id)
+
+    @staticmethod
+    def _clamp01(value: float) -> float:
+        return max(0.0, min(1.0, value))
+
+    def _safe_ratio(self, numerator: float, denominator: float, default: float = 1.0) -> float:
+        if denominator <= 0:
+            return default
+        return self._clamp01(numerator / denominator)
+
+    def _efficiency_score(self, steps_used: int, optimal_steps: int) -> float:
+        if steps_used <= 0 or optimal_steps <= 0:
+            return 0.0
+        if steps_used <= optimal_steps:
+            return 1.0
+        return self._clamp01(1.0 - ((steps_used - optimal_steps) / optimal_steps))
     
     def _get_task_weights(self, task_id: str) -> dict[str, float]:
         """Get scoring weights based on task difficulty."""
@@ -119,19 +135,30 @@ class BugTriageGrader:
         team_correct = metrics.get("team_correct", 0)
         duplicate_correct = metrics.get("duplicate_correct", 0)
         
-        total_tickets = len(ground_truths)
+        label_total = metrics.get(
+            "label_total",
+            sum(1 for gt in ground_truths if gt.get("duplicate_of") is None),
+        )
+        team_total = metrics.get("assignment_total", label_total)
+        duplicate_expected_total = metrics.get(
+            "duplicate_expected_total",
+            sum(1 for gt in ground_truths if gt.get("duplicate_of") is not None),
+        )
         
-        if total_tickets > 0:
-            subscores["severity_accuracy"] = severity_correct / total_tickets
-            subscores["priority_accuracy"] = priority_correct / total_tickets
-            subscores["component_accuracy"] = component_correct / total_tickets
-            subscores["team_accuracy"] = team_correct / total_tickets
-            subscores["duplicate_handling"] = duplicate_correct / max(1, metrics.get("duplicate_total", 1))
+        subscores["severity_accuracy"] = self._safe_ratio(severity_correct, label_total, default=0.0)
+        subscores["priority_accuracy"] = self._safe_ratio(priority_correct, label_total, default=0.0)
+        subscores["component_accuracy"] = self._safe_ratio(component_correct, label_total, default=0.0)
+        subscores["team_accuracy"] = self._safe_ratio(team_correct, team_total, default=0.0)
+        subscores["duplicate_handling"] = self._safe_ratio(
+            duplicate_correct,
+            duplicate_expected_total,
+            default=1.0,
+        )
         
         # Efficiency score
         steps_used = metrics.get("steps_used", 0)
-        optimal_steps = total_tickets * 2  # Classify + assign per ticket
-        subscores["efficiency"] = max(0.0, 1.0 - (steps_used - optimal_steps) / optimal_steps) if optimal_steps > 0 else 0.0
+        optimal_steps = (label_total * 3) + (duplicate_expected_total * 4)
+        subscores["efficiency"] = self._efficiency_score(steps_used, optimal_steps)
         
         # Track major mistakes
         major_mistakes = metrics.get("major_mistakes", 0)
@@ -157,32 +184,47 @@ class BugTriageGrader:
         duplicate_correct = metrics.get("duplicate_correct", 0)
         info_request_correct = metrics.get("info_request_correct", 0)
         
-        total_tickets = len(ground_truths)
+        label_total = metrics.get(
+            "label_total",
+            sum(1 for gt in ground_truths if gt.get("duplicate_of") is None),
+        )
+        team_total = metrics.get("assignment_total", label_total)
+        duplicate_expected_total = metrics.get(
+            "duplicate_expected_total",
+            sum(1 for gt in ground_truths if gt.get("duplicate_of") is not None),
+        )
+        duplicate_predicted_total = metrics.get("duplicate_total", 0)
+        info_needed_total = metrics.get(
+            "info_needed_total",
+            sum(1 for gt in ground_truths if gt.get("needs_more_info")),
+        )
         
-        if total_tickets > 0:
-            subscores["severity_accuracy"] = severity_correct / total_tickets
-            subscores["priority_accuracy"] = priority_correct / total_tickets
-            subscores["component_accuracy"] = component_correct / total_tickets
-            subscores["team_accuracy"] = team_correct / total_tickets
+        subscores["severity_accuracy"] = self._safe_ratio(severity_correct, label_total, default=0.0)
+        subscores["priority_accuracy"] = self._safe_ratio(priority_correct, label_total, default=0.0)
+        subscores["component_accuracy"] = self._safe_ratio(component_correct, label_total, default=0.0)
+        subscores["team_accuracy"] = self._safe_ratio(team_correct, team_total, default=0.0)
         
         # Duplicate F1-like score
-        duplicate_total = metrics.get("duplicate_total", 0)
-        if duplicate_total > 0:
-            subscores["duplicate_handling"] = duplicate_correct / duplicate_total
+        if duplicate_expected_total > 0 or duplicate_predicted_total > 0:
+            precision = self._safe_ratio(duplicate_correct, duplicate_predicted_total, default=0.0)
+            recall = self._safe_ratio(duplicate_correct, duplicate_expected_total, default=0.0)
+            if precision + recall > 0:
+                subscores["duplicate_handling"] = 2 * precision * recall / (precision + recall)
+            else:
+                subscores["duplicate_handling"] = 0.0
         else:
             subscores["duplicate_handling"] = 1.0
         
         # Info request accuracy
-        info_needed_total = metrics.get("info_needed_total", 0)
         if info_needed_total > 0:
-            subscores["info_request_accuracy"] = info_request_correct / info_needed_total
+            subscores["info_request_accuracy"] = self._safe_ratio(info_request_correct, info_needed_total, default=0.0)
         else:
             subscores["info_request_accuracy"] = 1.0
         
         # Efficiency
         steps_used = metrics.get("steps_used", 0)
         step_budget = metrics.get("step_budget", 100)
-        subscores["efficiency"] = 1.0 - (steps_used / step_budget) if step_budget > 0 else 0.0
+        subscores["efficiency"] = self._safe_ratio(max(0, step_budget - steps_used), step_budget, default=0.0)
         
         # Check for destructive actions
         if metrics.get("incorrect_close_count", 0) > 0:
@@ -202,33 +244,50 @@ class BugTriageGrader:
         
         # Critical severity accuracy (sev0/sev1)
         critical_severity_correct = metrics.get("critical_severity_correct", 0)
-        critical_severity_total = metrics.get("critical_severity_total", 1)
-        subscores["critical_severity_accuracy"] = critical_severity_correct / critical_severity_total
-        
+        critical_severity_total = metrics.get(
+            "critical_severity_total",
+            sum(1 for gt in ground_truths if gt.get("true_severity") in {"sev0", "sev1"}),
+        )
+        subscores["critical_severity_accuracy"] = self._safe_ratio(
+            critical_severity_correct,
+            critical_severity_total,
+            default=1.0,
+        )
+
         # Priority accuracy
         priority_correct = metrics.get("priority_correct", 0)
-        total_tickets = len(ground_truths)
-        subscores["priority_accuracy"] = priority_correct / total_tickets if total_tickets > 0 else 0.0
-        
+        label_total = metrics.get(
+            "label_total",
+            sum(1 for gt in ground_truths if gt.get("duplicate_of") is None),
+        )
+        team_total = metrics.get("assignment_total", label_total)
+        subscores["priority_accuracy"] = self._safe_ratio(priority_correct, label_total, default=0.0)
+
         # Component and team
         component_correct = metrics.get("component_correct", 0)
         team_correct = metrics.get("team_correct", 0)
-        subscores["component_accuracy"] = component_correct / total_tickets if total_tickets > 0 else 0.0
-        subscores["team_accuracy"] = team_correct / total_tickets if total_tickets > 0 else 0.0
-        
+        subscores["component_accuracy"] = self._safe_ratio(component_correct, label_total, default=0.0)
+        subscores["team_accuracy"] = self._safe_ratio(team_correct, team_total, default=0.0)
+
         # SLA handling
         sla_met = metrics.get("sla_met", 0)
-        sla_total = metrics.get("sla_total", 1)
-        subscores["sla_handling"] = sla_met / sla_total
-        
+        sla_total = metrics.get("sla_total", critical_severity_total)
+        subscores["sla_handling"] = self._safe_ratio(sla_met, sla_total, default=1.0)
+
         # Escalation accuracy
         escalation_correct = metrics.get("escalation_correct", 0)
-        escalation_total = metrics.get("escalation_total", 1)
-        subscores["escalation_accuracy"] = escalation_correct / escalation_total
-        
+        escalation_total = metrics.get("escalation_total", critical_severity_total)
+        subscores["escalation_accuracy"] = self._safe_ratio(
+            escalation_correct,
+            escalation_total,
+            default=1.0,
+        )
+
         # Policy quality (avoid destructive shortcuts)
         destructive_actions = metrics.get("destructive_actions", 0)
-        subscores["policy_quality"] = max(0.0, 1.0 - (destructive_actions / total_tickets)) if total_tickets > 0 else 1.0
+        subscores["policy_quality"] = self._clamp01(
+            1.0 - self._safe_ratio(destructive_actions, label_total, default=0.0)
+        ) if label_total > 0 else 1.0
         
         # Track critical mistakes
         if metrics.get("missed_critical_escalation", 0) > 0:

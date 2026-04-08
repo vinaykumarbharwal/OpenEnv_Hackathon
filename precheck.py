@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -21,6 +22,17 @@ from pathlib import Path
 
 def log(msg: str) -> None:
     print(msg)
+
+
+def normalize_space_url(space_url: str) -> str:
+    """Accept either hf.space or huggingface.co/spaces URLs."""
+    value = space_url.strip().rstrip("/")
+    match = re.match(r"^https?://huggingface\.co/spaces/([^/]+)/([^/]+)$", value)
+    if match:
+        owner, space = match.groups()
+        slug = f"{owner}-{space}".replace("_", "-")
+        return f"https://{slug}.hf.space"
+    return value
 
 
 def run(cmd: list[str], cwd: Path | None = None, timeout: int = 1800) -> tuple[int, str, str]:
@@ -35,18 +47,19 @@ def run(cmd: list[str], cwd: Path | None = None, timeout: int = 1800) -> tuple[i
 
 
 def check_space(space_url: str, timeout_seconds: int) -> tuple[bool, str]:
-    reset_url = f"{space_url.rstrip('/')}/reset"
+    normalized_url = normalize_space_url(space_url)
+    reset_url = f"{normalized_url.rstrip('/')}/reset"
     req = urllib.request.Request(reset_url, method="GET")
     try:
         with urllib.request.urlopen(req, timeout=timeout_seconds) as resp:
             code = int(resp.getcode())
             if code == 200:
-                return True, f"HF Space /reset returned HTTP {code}"
-            return False, f"HF Space /reset returned HTTP {code} (expected 200)"
+                return True, f"HF Space /reset returned HTTP {code} ({normalized_url})"
+            return False, f"HF Space /reset returned HTTP {code} (expected 200) ({normalized_url})"
     except urllib.error.HTTPError as err:
-        return False, f"HF Space /reset returned HTTP {err.code} (expected 200)"
+        return False, f"HF Space /reset returned HTTP {err.code} (expected 200) ({normalized_url})"
     except Exception as err:
-        return False, f"HF Space check failed: {err}"
+        return False, f"HF Space check failed: {err} ({normalized_url})"
 
 
 def check_docker_build(repo_dir: Path, docker_timeout: int) -> tuple[bool, str]:

@@ -27,7 +27,7 @@ def main() -> None:
     reload_enabled = _as_bool(os.getenv("RELOAD", "false"))
 
     uvicorn.run(
-        "openenv_bug_triage.app:app",
+        "server.app:app",
         host=host,
         port=port,
         reload=reload_enabled,

@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bug-triage-openenv"
+version = "0.1.0"
+description = "A real-world OpenEnv environment for software bug triage workflows."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "pydantic>=2.0.0",
+  "openai>=1.0.0",
+  "python-dotenv>=1.0.0",
+  "fastapi>=0.116.0",
+  "uvicorn[standard]>=0.35.0",
+  "openenv-core",
+]
+
+[project.scripts]
+server = "server.app:main"
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=9.0.0",
+  "httpx>=0.28.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["openenv_bug_triage*", "server*"]

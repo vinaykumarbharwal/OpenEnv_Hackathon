@@ -1,0 +1,10 @@
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.uv-cache/
+artifacts/
+.git/
+.gitignore
+.env
+.env.local

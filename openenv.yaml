@@ -1,15 +1,41 @@
+spec_version: 1
 id: bug-triage-openenv
 name: Bug Triage OpenEnv
 version: 0.1.0
+type: typed
+description: >
+  A real-world OpenEnv environment for software bug triage. Agents classify,
+  route, deduplicate, request missing information, and escalate software bug
+  reports across easy, medium, and hard task settings.
 entrypoint: openenv_bug_triage.env:BugTriageEnv
 tags:
   - openenv
   - bug-triage
   - real-world
+runtime:
+  type: docker
+  port: 7860
+app:
+  entry: server/app.py
+  host: 0.0.0.0
+  port: 7860
 tasks:
   - id: bug_triage_easy
     difficulty: easy
+    description: "8 mostly clear bug reports with minimal duplicates"
+    reward_range: [0.0, 1.0]
   - id: bug_triage_medium
     difficulty: medium
+    description: "15 mixed-quality reports with duplicates and missing info"
+    reward_range: [0.0, 1.0]
   - id: bug_triage_hard
     difficulty: hard
+    description: "25 noisy tickets under SLA pressure and escalation trade-offs"
+    reward_range: [0.0, 1.0]
+reward_range: [0.0, 1.0]
+api:
+  reset: /reset
+  step: /step
+  state: /state
+  health: /health
+  tasks: /tasks
