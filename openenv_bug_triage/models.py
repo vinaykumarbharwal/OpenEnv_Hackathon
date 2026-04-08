@@ -144,10 +144,21 @@ class ActionModel(BaseModel):
             "escalate_incident": self.escalate_incident,
             "next_ticket": self.next_ticket,
         }
-        
+
         expected_field = action_map.get(self.action_type)
         if expected_field is None and self.action_type != "next_ticket":
             raise ValueError(f"Missing payload for action_type '{self.action_type}'")
+
+        unexpected_fields = [
+            field_name
+            for field_name, payload in action_map.items()
+            if field_name != self.action_type and payload is not None
+        ]
+        if unexpected_fields:
+            extras = ", ".join(sorted(unexpected_fields))
+            raise ValueError(
+                f"Unexpected payload field(s) for action_type '{self.action_type}': {extras}"
+            )
 
 
 class RewardModel(BaseModel):

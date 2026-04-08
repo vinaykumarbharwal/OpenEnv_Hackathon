@@ -77,17 +77,37 @@ def check_docker_build(repo_dir: Path, docker_timeout: int) -> tuple[bool, str]:
     if code == 0:
         return True, f"Docker build succeeded ({context})"
 
-    tail = "\n".join((out + "\n" + err).strip().splitlines()[-20:])
+    combined = (out + "\n" + err).strip()
+    combined_lower = combined.lower()
+    if (
+        "failed to connect to the docker api" in combined_lower
+        or "dockerdesktoplinuxengine" in combined_lower
+        or ("access is denied" in combined_lower and ".docker\\buildx\\instances" in combined_lower)
+    ):
+        return False, "Docker daemon is not running or is not accessible to the current user"
+
+    tail = "\n".join(combined.splitlines()[-20:])
     return False, f"Docker build failed (timeout={docker_timeout}s)\n{tail}"
 
 
 def check_openenv_validate(repo_dir: Path) -> tuple[bool, str]:
+    local_cli_candidates = [
+        repo_dir / "venv" / "Scripts" / "openenv.exe",
+        repo_dir / "venv" / "bin" / "openenv",
+    ]
+
     cmd = None
     if shutil.which("openenv") is not None:
         cmd = ["openenv", "validate"]
     else:
+        for candidate in local_cli_candidates:
+            if candidate.exists():
+                cmd = [str(candidate), "validate"]
+                break
+
+    if cmd is None:
         # Fallback for environments where console scripts are not on PATH.
-        cmd = [sys.executable, "-m", "openenv", "validate"]
+        cmd = [sys.executable, "-m", "openenv.cli", "validate"]
 
     code, out, err = run(cmd, cwd=repo_dir, timeout=600)
     if code == 0:
