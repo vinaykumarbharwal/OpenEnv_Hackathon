@@ -1,4 +1,4 @@
-﻿(() => {
+(() => {
   const BASE_PATH = String(window.OPENENV_BASE_PATH || "").replace(/\/$/, "");
 
   const DEFAULT_COMPONENTS = [
@@ -9,6 +9,14 @@
   const DEFAULT_TEAMS = [
     "backend-api", "frontend-web", "mobile-ios", "mobile-android", "infrastructure", "data-platform",
   ];
+
+  // Used as a fallback when the /tasks API call fails (e.g. server not yet ready).
+  const FALLBACK_TASKS = [
+    { id: "bug_triage_easy" },
+    { id: "bug_triage_medium" },
+    { id: "bug_triage_hard" },
+  ];
+
 
   const el = {
     health: document.getElementById("health"),

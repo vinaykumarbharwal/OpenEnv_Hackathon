@@ -1,0 +1,20 @@
+# Normalise all text files to LF in the repository.
+# Windows checkout behavior is controlled by git config core.autocrlf.
+* text=auto eol=lf
+
+# Force LF for Python, JS, HTML, CSS, YAML and Markdown.
+*.py    text eol=lf
+*.js    text eol=lf
+*.html  text eol=lf
+*.css   text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.md    text eol=lf
+*.toml  text eol=lf
+*.txt   text eol=lf
+*.json  text eol=lf
+
+# Binary files — do not modify.
+*.png   binary
+*.jpg   binary
+*.svg   binary

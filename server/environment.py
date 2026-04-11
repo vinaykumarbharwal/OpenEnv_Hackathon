@@ -617,10 +617,14 @@ class BugTriageEnv:
         return False
 
     def _calculate_partial_score(self) -> float:
-        if self.steps_used == 0:
+        """Compute a normalised [0, 1] partial score based on grading metrics so far."""
+        if self.steps_used == 0 or self.current_task is None:
             return 0.0
 
-        total_tickets = len(self.current_task.tickets) if self.current_task else 1
+        total_tickets = len(self.current_task.tickets)
+        if total_tickets == 0:
+            return 0.0
+
         score = 0.0
         score += self.metrics.get("severity_correct", 0) / total_tickets * 0.25
         score += self.metrics.get("priority_correct", 0) / total_tickets * 0.20

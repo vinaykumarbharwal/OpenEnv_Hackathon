@@ -1,4 +1,4 @@
-﻿"""
+"""
 Submission inference entrypoint.
 
 Mandatory environment variables:
@@ -10,6 +10,9 @@ Stdout contract:
 - [START] task=<task_name> env=<benchmark> model=<model_name>
 - [STEP]  step=<n> action=<action_str> reward=<0.00> done=<true|false> error=<msg|null>
 - [END]   success=<true|false> steps=<n> score=<0.xxxx> rewards=<r1,r2,...,rn>
+
+All deterministic heuristics live in ``server/heuristics.py`` and are
+shared with the FastAPI server so that changes remain in one place.
 """
 
 from __future__ import annotations
@@ -31,6 +34,13 @@ if str(PROJECT_ROOT) not in sys.path:
 from models import ActionModel
 from server.environment import BugTriageEnv
 from server.graders import BugTriageGrader
+from server.heuristics import (
+    COMPONENT_TEAM_MAP,
+    infer_component,
+    infer_priority,
+    infer_severity,
+    needs_more_info,
+)
 
 
 def _load_simple_env_file(dotenv_path: Path) -> None:
@@ -74,40 +84,9 @@ MAX_STEPS = int(os.getenv("MAX_STEPS", "200"))
 TEMPERATURE = float(os.getenv("TEMPERATURE", "0"))
 MAX_TOKENS = int(os.getenv("MAX_TOKENS", "220"))
 
-COMPONENT_TEAM_MAP = {
-    "api-gateway": "backend-api",
-    "auth-service": "backend-api",
-    "user-service": "backend-api",
-    "payment-service": "backend-api",
-    "web-app": "frontend-web",
-    "ios-app": "mobile-ios",
-    "android-app": "mobile-android",
-    "database": "data-platform",
-    "cache": "infrastructure",
-    "cdn": "infrastructure",
-}
-
-COMPONENT_KEYWORDS = {
-    "api-gateway": ("api gateway", "gateway", "edge", "proxy", "routing", "/api/"),
-    "auth-service": ("auth", "authentication", "login", "signin", "token", "session"),
-    "user-service": ("user service", "users endpoint", "profile", "identity", "account"),
-    "payment-service": ("payment", "checkout", "charge", "billing", "tax", "order"),
-    "web-app": ("web app", "web-app", "browser", "dashboard", "frontend", "page"),
-    "ios-app": ("ios", "iphone", "ipad", "apple"),
-    "android-app": ("android",),
-    "database": ("database", "query", "sql", "db", "index"),
-    "cache": ("cache", "redis", "memcache"),
-    "cdn": ("cdn", "image", "asset", "static content"),
-}
-
-SERVICE_COMPONENT_HINTS = {
-    "api": ("api-gateway", "user-service"),
-    "auth": ("auth-service",),
-    "identity": ("user-service",),
-    "payments": ("payment-service",),
-    "web-app": ("web-app", "cdn", "database", "cache"),
-    "mobile-app": ("ios-app", "android-app", "auth-service"),
-}
+# COMPONENT_TEAM_MAP, COMPONENT_KEYWORDS, SERVICE_COMPONENT_HINTS and all
+# heuristic inference functions are imported from server.heuristics so they
+# are shared with the FastAPI server without duplication.
 
 
 class ActionParseError(ValueError):
@@ -176,139 +155,8 @@ def _action_to_log(action: ActionModel) -> str:
     return f"raw:{json.dumps(payload, separators=(',', ':'))}"
 
 
-def _severity_to_priority(severity: str) -> str:
-    return {
-        "sev0": "p0",
-        "sev1": "p1",
-        "sev2": "p2",
-        "sev3": "p3",
-    }.get(severity, "p2")
-
-
-def _ticket_text(ticket) -> str:
-    return " ".join(
-        str(part)
-        for part in (
-            ticket.title,
-            ticket.description,
-            ticket.service,
-            " ".join(ticket.component_candidates),
-        )
-    ).lower()
-
-
-def _infer_component(ticket, available_components: list[str]) -> str:
-    candidates = [c for c in ticket.component_candidates if c in available_components]
-    if not candidates:
-        return available_components[0] if available_components else "api-gateway"
-
-    text = _ticket_text(ticket)
-    service_hints = SERVICE_COMPONENT_HINTS.get(ticket.service, ())
-    best_candidate = candidates[0]
-    best_score = -1
-
-    for index, candidate in enumerate(candidates):
-        score = 0
-        score += max(0, 3 - index)
-
-        if candidate in service_hints:
-            score += 3
-
-        normalized = candidate.replace("-", " ")
-        if normalized in text:
-            score += 4
-
-        for keyword in COMPONENT_KEYWORDS.get(candidate, ()):
-            if keyword in text:
-                score += 3
-
-        if candidate == "ios-app" and "login" in text:
-            score += 1
-        if candidate == "payment-service" and "gateway" in text:
-            score += 1
-        if candidate == "database" and "slow" in text:
-            score += 1
-
-        if score > best_score:
-            best_score = score
-            best_candidate = candidate
-
-    return best_candidate
-
-
-def _infer_severity(ticket, component: str) -> str:
-    text = _ticket_text(ticket)
-    synthetic_high_signal = "signal quality is high" in text
-    synthetic_low_signal = "signal quality is low" in text
-
-    if any(k in text for k in ["security", "unauthorized", "double charge", "data loss", "corrupt"]):
-        return "sev0"
-
-    if any(k in text for k in ["500 internal server error", "null pointer exception", "multiple monitoring alerts"]):
-        if ticket.reporter_type == "monitoring" and ticket.customer_tier == "enterprise":
-            return "sev0"
-
-    if synthetic_high_signal and ticket.reporter_type == "monitoring" and ticket.customer_tier == "enterprise":
-        return "sev1"
-
-    if any(k in text for k in ["timeout", "timing out", "503", "outage", "down"]):
-        return "sev1"
-
-    if synthetic_high_signal and ticket.customer_tier in {"pro", "enterprise"}:
-        return "sev1"
-
-    if "incorrect tax" in text or ("tax" in text and "wrong" in text):
-        return "sev1" if ticket.customer_tier in {"pro", "enterprise"} else "sev2"
-
-    if synthetic_low_signal:
-        return "sev3" if ticket.customer_tier == "free" else "sev2"
-
-    if any(k in text for k in ["crash", "not responding", "not working", "broken image", "wrong values"]):
-        return "sev2"
-
-    if any(k in text for k in ["latency", "slow", "degraded", "error", "failed"]):
-        if component == "database" and ticket.customer_tier == "free":
-            return "sev3"
-        return "sev2"
-
-    return "sev3"
-
-
-def _infer_priority(ticket, severity: str) -> str:
-    text = _ticket_text(ticket)
-
-    if severity == "sev2" and (
-        ticket.customer_tier == "enterprise"
-        or ticket.reporter_type == "monitoring"
-        or any(k in text for k in ["payment", "checkout", "tax", "cdn", "image", "shopping"])
-    ):
-        return "p1"
-
-    return _severity_to_priority(severity)
-
-
-def _needs_more_info(ticket) -> bool:
-    text = _ticket_text(ticket)
-
-    if ticket.suspected_duplicate_ids:
-        return False
-
-    if "signal quality is low" in text:
-        return True
-
-    if not ticket.repro_steps_present and not ticket.logs_present:
-        return True
-
-    if not ticket.repro_steps_present and ticket.reporter_type != "monitoring":
-        return True
-
-    if not ticket.logs_present and ticket.reporter_type in {"user", "qa"}:
-        return True
-
-    return False
-
-
 def _fallback_action(observation, plans: dict[str, dict]) -> ActionModel:
+    """Deterministic fallback policy used when the LLM is unavailable."""
     ticket = observation.current_ticket
     if ticket is None:
         return ActionModel(action_type="next_ticket", next_ticket={})
@@ -318,15 +166,15 @@ def _fallback_action(observation, plans: dict[str, dict]) -> ActionModel:
     phase = int(plan.get("phase", 0))
 
     if phase == 0:
-        component = _infer_component(ticket, observation.available_components)
-        severity = _infer_severity(ticket, component)
-        priority = _infer_priority(ticket, severity)
+        component = infer_component(ticket, observation.available_components)
+        severity = infer_severity(ticket, component)
+        priority = infer_priority(ticket, severity)
         duplicate_id = (ticket.suspected_duplicate_ids or [None])[0]
         plan["phase"] = 1
         plan["severity"] = severity
         plan["component"] = component
         plan["duplicate_id"] = duplicate_id
-        plan["needs_more_info"] = _needs_more_info(ticket)
+        plan["needs_more_info"] = needs_more_info(ticket)
         return ActionModel(
             action_type="classify",
             classify={
@@ -337,7 +185,7 @@ def _fallback_action(observation, plans: dict[str, dict]) -> ActionModel:
         )
 
     if phase == 1:
-        component = str(plan.get("component") or _infer_component(ticket, observation.available_components))
+        component = str(plan.get("component") or infer_component(ticket, observation.available_components))
         default_team = observation.available_teams[0] if observation.available_teams else "backend-api"
         team = COMPONENT_TEAM_MAP.get(component, default_team)
         plan["phase"] = 2
@@ -557,7 +405,7 @@ def _run_task(task_id: str, env: BugTriageEnv, client: OpenAI | None) -> None:
 
     done = False
     episode_actions: list[dict] = []
-    info = {"metrics": {}}
+    info: dict = {"metrics": {}}
 
     try:
         obs = env.reset(task_id=task_id, seed=SEED)
@@ -571,7 +419,12 @@ def _run_task(task_id: str, env: BugTriageEnv, client: OpenAI | None) -> None:
                     action = _request_model_action(client, obs)
                 except ActionParseError:
                     action = _fallback_action(obs, plans)
-                except Exception:
+                except Exception as exc:  # noqa: BLE001
+                    print(
+                        f"[WARN] Model API error; switching to offline fallback: {_sanitize(str(exc))}",
+                        file=sys.stderr,
+                        flush=True,
+                    )
                     api_disabled = True
                     action = _fallback_action(obs, plans)
             else:
@@ -621,7 +474,13 @@ def _run_task(task_id: str, env: BugTriageEnv, client: OpenAI | None) -> None:
             )
             score = _strict_unit_interval(grader_result.score)
             success = bool(grader_result.passed)
-        except Exception:
+        except Exception as exc:  # noqa: BLE001
+            print(
+                f"[WARN] Grader failed for task '{task_id}'; falling back to reward average: "
+                f"{_sanitize(str(exc))}",
+                file=sys.stderr,
+                flush=True,
+            )
             success = bool(done)
             parsed_rewards: list[float] = []
             for reward_text in rewards:

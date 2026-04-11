@@ -16,6 +16,14 @@ from pydantic import BaseModel
 
 from models import ActionModel
 from server.environment import BugTriageEnv
+from server.heuristics import (
+    COMPONENT_TEAM_MAP,
+    infer_component,
+    infer_priority,
+    infer_severity,
+    needs_more_info,
+    suggested_info_type,
+)
 from server.tasks import list_tasks
 
 
@@ -32,11 +40,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ---------------------------------------------------------------------------
+# Global singleton environment
+# NOTE: This server is designed for single-user / validator use.  The
+# environment is shared across all HTTP requests and protected by ENV_LOCK.
+# Running multiple concurrent sessions will interleave state; deploy separate
+# server instances if multi-tenancy is required.
+# ---------------------------------------------------------------------------
 env = BugTriageEnv()
 ENV_LOCK = threading.RLock()
 STATIC_DIR = Path(__file__).resolve().parents[1] / "static"
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
 
 FALLBACK_BASELINE = {
     "model": "offline-heuristic",
@@ -49,175 +65,10 @@ FALLBACK_BASELINE = {
     ],
 }
 
-COMPONENT_TEAM_MAP = {
-    "api-gateway": "backend-api",
-    "auth-service": "backend-api",
-    "user-service": "backend-api",
-    "payment-service": "backend-api",
-    "web-app": "frontend-web",
-    "ios-app": "mobile-ios",
-    "android-app": "mobile-android",
-    "database": "data-platform",
-    "cache": "infrastructure",
-    "cdn": "infrastructure",
-}
-
-COMPONENT_KEYWORDS = {
-    "api-gateway": ("api gateway", "gateway", "edge", "proxy", "routing", "/api/"),
-    "auth-service": ("auth", "authentication", "login", "signin", "token", "session"),
-    "user-service": ("user service", "users endpoint", "profile", "identity", "account"),
-    "payment-service": ("payment", "checkout", "charge", "billing", "tax", "order"),
-    "web-app": ("web app", "web-app", "browser", "dashboard", "frontend", "page"),
-    "ios-app": ("ios", "iphone", "ipad", "apple"),
-    "android-app": ("android",),
-    "database": ("database", "query", "sql", "db", "index"),
-    "cache": ("cache", "redis", "memcache"),
-    "cdn": ("cdn", "image", "asset", "static content"),
-}
-
-SERVICE_COMPONENT_HINTS = {
-    "api": ("api-gateway", "user-service"),
-    "auth": ("auth-service",),
-    "identity": ("user-service",),
-    "payments": ("payment-service",),
-    "web-app": ("web-app", "cdn", "database", "cache"),
-    "mobile-app": ("ios-app", "android-app", "auth-service"),
-}
-
-
-def severity_to_priority(severity: str) -> str:
-    return {
-        "sev0": "p0",
-        "sev1": "p1",
-        "sev2": "p2",
-        "sev3": "p3",
-    }.get(severity, "p2")
-
-
-def ticket_text(ticket) -> str:
-    return " ".join(
-        str(part)
-        for part in (
-            ticket.title,
-            ticket.description,
-            ticket.service,
-            " ".join(ticket.component_candidates),
-        )
-    ).lower()
-
-
-def infer_component(ticket, available_components: list[str]) -> str:
-    candidates = [c for c in ticket.component_candidates if c in available_components]
-    if not candidates:
-        return available_components[0] if available_components else "api-gateway"
-
-    text = ticket_text(ticket)
-    service_hints = SERVICE_COMPONENT_HINTS.get(ticket.service, ())
-    best_candidate = candidates[0]
-    best_score = -1
-
-    for index, candidate in enumerate(candidates):
-        score = 0
-        score += max(0, 3 - index)
-
-        if candidate in service_hints:
-            score += 3
-
-        normalized = candidate.replace("-", " ")
-        if normalized in text:
-            score += 4
-
-        for keyword in COMPONENT_KEYWORDS.get(candidate, ()):
-            if keyword in text:
-                score += 3
-
-        if score > best_score:
-            best_score = score
-            best_candidate = candidate
-
-    return best_candidate
-
-
-def infer_severity(ticket, component: str) -> str:
-    text = ticket_text(ticket)
-    synthetic_high_signal = "signal quality is high" in text
-    synthetic_low_signal = "signal quality is low" in text
-
-    if any(k in text for k in ["security", "unauthorized", "double charge", "data loss", "corrupt"]):
-        return "sev0"
-
-    if any(k in text for k in ["500 internal server error", "null pointer exception", "multiple monitoring alerts"]):
-        if ticket.reporter_type == "monitoring" and ticket.customer_tier == "enterprise":
-            return "sev0"
-
-    if synthetic_high_signal and ticket.reporter_type == "monitoring" and ticket.customer_tier == "enterprise":
-        return "sev1"
-
-    if any(k in text for k in ["timeout", "timing out", "503", "outage", "down"]):
-        return "sev1"
-
-    if synthetic_high_signal and ticket.customer_tier in {"pro", "enterprise"}:
-        return "sev1"
-
-    if "incorrect tax" in text or ("tax" in text and "wrong" in text):
-        return "sev1" if ticket.customer_tier in {"pro", "enterprise"} else "sev2"
-
-    if synthetic_low_signal:
-        return "sev3" if ticket.customer_tier == "free" else "sev2"
-
-    if any(k in text for k in ["crash", "not responding", "not working", "broken image", "wrong values"]):
-        return "sev2"
-
-    if any(k in text for k in ["latency", "slow", "degraded", "error", "failed"]):
-        if component == "database" and ticket.customer_tier == "free":
-            return "sev3"
-        return "sev2"
-
-    return "sev3"
-
-
-def infer_priority(ticket, severity: str) -> str:
-    text = ticket_text(ticket)
-
-    if severity == "sev2" and (
-        ticket.customer_tier == "enterprise"
-        or ticket.reporter_type == "monitoring"
-        or any(k in text for k in ["payment", "checkout", "tax", "cdn", "image", "shopping"])
-    ):
-        return "p1"
-
-    return severity_to_priority(severity)
-
-
-def needs_more_info(ticket) -> bool:
-    text = ticket_text(ticket)
-
-    if ticket.suspected_duplicate_ids:
+def _as_bool(value: str | None) -> bool:
+    if value is None:
         return False
-
-    if "signal quality is low" in text:
-        return True
-
-    if not ticket.repro_steps_present and not ticket.logs_present:
-        return True
-
-    if not ticket.repro_steps_present and ticket.reporter_type != "monitoring":
-        return True
-
-    if not ticket.logs_present and ticket.reporter_type in {"user", "qa"}:
-        return True
-
-    return False
-
-
-def suggested_info_type(ticket) -> str:
-    if not ticket.repro_steps_present and not ticket.logs_present:
-        return "both"
-    if not ticket.repro_steps_present:
-        return "repro_steps"
-    if not ticket.logs_present:
-        return "logs"
-    return "both"
+    return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
 def suggest_action(observation, action_history: list[str] | None = None) -> tuple[ActionModel, str]:

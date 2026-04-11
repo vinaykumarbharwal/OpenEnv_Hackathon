@@ -37,21 +37,8 @@ class TicketGroundTruth(BaseModel):
     needs_more_info: bool
 
 
-class CurrentTicketModel(BaseModel):
-    """Current ticket being focused on."""
-
-    ticket_id: str
-    title: str
-    description: str
-    reporter_type: Literal["user", "qa", "monitoring"]
-    service: str
-    component_candidates: list[str]
-    created_at: datetime
-    customer_tier: Literal["free", "pro", "enterprise"]
-    repro_steps_present: bool
-    logs_present: bool
-    attachments_count: int
-    suspected_duplicate_ids: list[str]
+class CurrentTicketModel(TicketModel):
+    """Current ticket being focused on (inherits all fields from TicketModel)."""
 
 
 class QueueStatsModel(BaseModel):
