@@ -1,0 +1,109 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bug Triage OpenEnv</title>
+  <link rel="icon" href="__APP_BASE__/static/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="__APP_BASE__/static/styles.css" />
+</head>
+<body>
+  <main class="container">
+    <header class="card">
+      <h1>Bug Triage OpenEnv</h1>
+      <p class="muted">Simple runner for <code>reset()</code>, <code>step()</code>, and <code>state()</code>.</p>
+      <p>
+        <strong>Health:</strong> <span id="health">checking...</span>
+        <span class="sep">|</span>
+        <strong>Status:</strong> <span id="status">idle</span>
+      </p>
+    </header>
+
+    <section class="grid two">
+      <article class="card">
+        <h2>Session</h2>
+        <div class="row">
+          <label>
+            Task
+            <select id="task-select"></select>
+          </label>
+          <label>
+            Seed
+            <input id="seed-input" type="number" value="42" min="0" step="1" />
+          </label>
+        </div>
+        <div class="row buttons">
+          <button id="reset-btn">Reset</button>
+          <button id="state-btn" class="secondary">Refresh State</button>
+        </div>
+        <div id="baseline" class="muted small">Baseline: loading...</div>
+      </article>
+
+      <article class="card">
+        <h2>Metrics</h2>
+        <div class="metrics">
+          <div><span>steps_used</span><strong id="m-steps-used">0</strong></div>
+          <div><span>steps_remaining</span><strong id="m-steps-remaining">0</strong></div>
+          <div><span>queue_remaining</span><strong id="m-queue-remaining">0</strong></div>
+          <div><span>urgent_count</span><strong id="m-urgent-count">0</strong></div>
+          <div><span>sla_at_risk</span><strong id="m-sla-risk">0</strong></div>
+          <div><span>partial_score</span><strong id="m-partial-score">0.00</strong></div>
+          <div><span>cumulative_reward</span><strong id="m-cumulative-reward">0.00</strong></div>
+          <div><span>episode_done</span><strong id="m-done">false</strong></div>
+        </div>
+      </article>
+    </section>
+
+    <section class="grid two">
+      <article class="card">
+        <h2>Action Builder</h2>
+        <label>
+          Action Type
+          <select id="action-type">
+            <option value="classify">classify</option>
+            <option value="assign">assign</option>
+            <option value="mark_duplicate">mark_duplicate</option>
+            <option value="request_info">request_info</option>
+            <option value="defer">defer</option>
+            <option value="close">close</option>
+            <option value="escalate_incident">escalate_incident</option>
+            <option value="next_ticket">next_ticket</option>
+          </select>
+        </label>
+        <div id="payload-fields" class="stack"></div>
+        <div class="row buttons">
+          <button id="suggest-btn" class="secondary">Suggest</button>
+          <button id="step-btn">Step</button>
+        </div>
+        <h3>Action JSON</h3>
+        <pre id="action-preview">{}</pre>
+      </article>
+
+      <article class="card">
+        <h2>Current Ticket</h2>
+        <p id="ticket-summary" class="muted">No ticket loaded.</p>
+        <pre id="ticket-json">{}</pre>
+      </article>
+    </section>
+
+    <section class="grid two">
+      <article class="card">
+        <h2>Last Reward</h2>
+        <pre id="reward-json">{}</pre>
+      </article>
+      <article class="card">
+        <h2>State</h2>
+        <pre id="state-json">{}</pre>
+      </article>
+    </section>
+
+    <section class="card">
+      <h2>Step Log</h2>
+      <ol id="log"></ol>
+    </section>
+  </main>
+
+  <script>window.OPENENV_BASE_PATH = "__APP_BASE__";</script>
+  <script src="__APP_BASE__/static/app.js"></script>
+</body>
+</html>

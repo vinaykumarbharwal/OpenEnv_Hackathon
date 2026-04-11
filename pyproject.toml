@@ -27,4 +27,4 @@ dev = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["openenv_bug_triage*", "server*"]
+include = ["server*"]

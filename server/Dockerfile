@@ -5,12 +5,15 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY openenv_bug_triage/ ./openenv_bug_triage/
 COPY server/ ./server/
+COPY static/ ./static/
+COPY inference.py ./inference.py
+COPY models.py ./models.py
+COPY client.py ./client.py
+COPY __init__.py ./__init__.py
 COPY openenv.yaml .
 COPY pyproject.toml .
 COPY README.md .
-COPY run.py .
 
 EXPOSE 7860
 

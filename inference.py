@@ -28,9 +28,9 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from openenv_bug_triage import BugTriageEnv
-from openenv_bug_triage.grader import BugTriageGrader
-from openenv_bug_triage.models import ActionModel
+from models import ActionModel
+from server.environment import BugTriageEnv
+from server.graders import BugTriageGrader
 
 
 def _load_simple_env_file(dotenv_path: Path) -> None:
@@ -133,9 +133,47 @@ def _strict_unit_interval(value: float, eps: float = 1e-6) -> float:
     return max(eps, min(1.0 - eps, float(value)))
 
 
+def _emit(line: str) -> None:
+    """Emit one stdout log line immediately."""
+    print(line, flush=True)
+
+
 def _action_to_log(action: ActionModel) -> str:
+    if _as_bool(os.getenv("OPENENV_LOG_ACTION_JSON")):
+        payload = action.model_dump(exclude_none=True)
+        return json.dumps(payload, separators=(",", ":"))
+
+    def _value(raw: object, max_len: int = 48) -> str:
+        text = _sanitize(str(raw)).replace(" ", "_")
+        if len(text) > max_len:
+            return f"{text[:max_len - 3]}..."
+        return text
+
+    if action.action_type == "classify" and action.classify:
+        return (
+            "classify("
+            f"sev={action.classify.severity},"
+            f"pri={action.classify.priority},"
+            f"comp={_value(action.classify.component)}"
+            ")"
+        )
+    if action.action_type == "assign" and action.assign:
+        return f"assign(team={_value(action.assign.team)})"
+    if action.action_type == "mark_duplicate" and action.mark_duplicate:
+        return f"mark_duplicate(canonical={_value(action.mark_duplicate.canonical_ticket_id)})"
+    if action.action_type == "request_info" and action.request_info:
+        return f"request_info(type={_value(action.request_info.info_type)})"
+    if action.action_type == "defer" and action.defer:
+        return f"defer(reason={_value(action.defer.reason)})"
+    if action.action_type == "close" and action.close:
+        return f"close(reason={_value(action.close.reason)})"
+    if action.action_type == "escalate_incident" and action.escalate_incident:
+        return f"escalate_incident(why={_value(action.escalate_incident.justification)})"
+    if action.action_type == "next_ticket":
+        return "next_ticket"
+
     payload = action.model_dump(exclude_none=True)
-    return json.dumps(payload, separators=(",", ":"))
+    return f"raw:{json.dumps(payload, separators=(',', ':'))}"
 
 
 def _severity_to_priority(severity: str) -> str:
@@ -505,7 +543,7 @@ def _request_model_action(client: OpenAI, observation) -> ActionModel:
 
 
 def _run_task(task_id: str, env: BugTriageEnv, client: OpenAI | None) -> None:
-    print(f"[START] task={task_id} env={BENCHMARK} model={MODEL_NAME}")
+    _emit(f"[START] task={task_id} env={BENCHMARK} model={MODEL_NAME}")
 
     step_no = 0
     rewards: list[str] = []
@@ -553,8 +591,8 @@ def _run_task(task_id: str, env: BugTriageEnv, client: OpenAI | None) -> None:
                 if error_raw:
                     err_value = _sanitize(error_raw)
 
-                print(
-                    f"[STEP] step={step_no} action={_action_to_log(action)} "
+                _emit(
+                    f"[STEP] step={step_no:03d} action={_action_to_log(action)} "
                     f"reward={reward_value} done={_b(bool(done))} error={err_value}"
                 )
 
@@ -564,8 +602,8 @@ def _run_task(task_id: str, env: BugTriageEnv, client: OpenAI | None) -> None:
                     steps_by_ticket[current_ticket_id] += 1
             except Exception as exc:
                 err_value = _sanitize(str(exc))
-                print(
-                    f"[STEP] step={step_no} action={_action_to_log(action)} "
+                _emit(
+                    f"[STEP] step={step_no:03d} action={_action_to_log(action)} "
                     f"reward=0.00 done=true error={err_value}"
                 )
                 rewards.append("0.00")
@@ -601,34 +639,35 @@ def _run_task(task_id: str, env: BugTriageEnv, client: OpenAI | None) -> None:
                 pass
 
         rewards_csv = ",".join(rewards)
-        print(f"[END] success={_b(success)} steps={step_no} score={score:.6f} rewards={rewards_csv}")
+        _emit(
+            f"[END] success={_b(success)} steps={step_no:03d} "
+            f"score={score:.6f} rewards={rewards_csv}"
+        )
 
 
 def main() -> int:
     offline_mode = _as_bool(os.getenv("OPENENV_OFFLINE"))
     client: OpenAI | None = None
 
-    if not offline_mode:
-        if not API_KEY:
-            print(
-                "HF_TOKEN is required for live inference. "
-                "OPENAI_API_KEY is also accepted for direct OpenAI endpoints. "
-                "Set OPENENV_OFFLINE=1 to run the local fallback policy instead.",
-                file=sys.stderr,
-            )
-            return 1
+    if not offline_mode and not API_KEY:
+        print(
+            "No HF_TOKEN or OPENAI_API_KEY found. Falling back to offline mode.",
+            file=sys.stderr,
+            flush=True,
+        )
+        offline_mode = True
 
+    if not offline_mode:
         try:
             client = OpenAI(api_key=API_KEY, base_url=API_BASE_URL, max_retries=0, timeout=30)
         except Exception as exc:
             print(
-                f"Warning: failed to initialize API client ({_sanitize(exc)}). "
-                "Falling back to offline policy.",
+                f"Failed to initialize OpenAI client ({_sanitize(exc)}). "
+                "Falling back to offline mode.",
                 file=sys.stderr,
+                flush=True,
             )
             client = None
-    else:
-        print("Running in offline fallback mode (OPENENV_OFFLINE=1).", file=sys.stderr)
 
     env = BugTriageEnv()
 

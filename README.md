@@ -84,7 +84,7 @@ It penalizes:
 - Missing escalation on critical tickets
 - Incorrect close or defer decisions
 
-Each task has a deterministic grader in `openenv_bug_triage/grader.py`.
+Each task has deterministic grader logic in `server/graders/`.
 For validator compatibility, final task scores are epsilon-clamped to a strict open interval:
 
 - minimum: `> 0.0`
@@ -102,20 +102,28 @@ Windows PowerShell:
 
 ```powershell
 venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+pip install -r server/requirements.txt
 ```
 
 macOS/Linux:
 
 ```bash
 source venv/bin/activate
-pip install -r requirements.txt
+pip install -r server/requirements.txt
 ```
 
 Validate:
 
 ```bash
 openenv validate
+```
+
+Configure submission variables (required by `inference.py`):
+
+```bash
+API_BASE_URL=https://router.huggingface.co/v1
+MODEL_NAME=Qwen/Qwen2.5-72B-Instruct
+HF_TOKEN=<your_hf_token>
 ```
 
 ## Run locally
@@ -125,6 +133,10 @@ Start the API:
 ```bash
 uvicorn server.app:app --host 0.0.0.0 --port 7860
 ```
+
+Web UI:
+
+- Open `http://127.0.0.1:7860/` (served from `static/`)
 
 Main endpoints:
 
@@ -143,11 +155,20 @@ Submission runner:
 python inference.py
 ```
 
+`inference.py` emits strict structured stdout logs in this order only:
+
+- `[START] ...`
+- `[STEP] ...` (one line per call to `step()`)
+- `[END] ...`
+
+By default, `action=` uses a compact human-readable format for easier scanning.
+Set `OPENENV_LOG_ACTION_JSON=1` to emit raw JSON action payloads instead.
+
 Deterministic offline baseline:
 
 ```powershell
 $env:OPENENV_OFFLINE = "1"
-venv\Scripts\python.exe scripts\baseline_inference.py --offline --seed 42
+venv\Scripts\python.exe inference.py
 ```
 
 Current offline baseline scores:
@@ -159,7 +180,7 @@ Current offline baseline scores:
 | `bug_triage_hard` | `0.6460` |
 | Mean | `0.7698` |
 
-The score artifact is saved to `artifacts/baseline_scores.json`.
+Scores are printed to stdout by `inference.py`.
 
 Submission check note:
 

@@ -7,7 +7,7 @@ description: >
   A real-world OpenEnv environment for software bug triage. Agents classify,
   route, deduplicate, request missing information, and escalate software bug
   reports across easy, medium, and hard task settings.
-entrypoint: openenv_bug_triage.env:BugTriageEnv
+entrypoint: server.environment:BugTriageEnv
 tags:
   - openenv
   - bug-triage

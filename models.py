@@ -4,11 +4,13 @@ Pydantic models for the Bug Triage OpenEnv environment.
 
 from datetime import datetime
 from typing import Literal, Optional
+
 from pydantic import BaseModel, Field
 
 
 class TicketModel(BaseModel):
     """Represents a bug ticket in the system."""
+
     ticket_id: str
     title: str
     description: str
@@ -25,6 +27,7 @@ class TicketModel(BaseModel):
 
 class TicketGroundTruth(BaseModel):
     """Hidden ground truth for a ticket."""
+
     ticket_id: str
     true_severity: Literal["sev0", "sev1", "sev2", "sev3"]
     true_priority: Literal["p0", "p1", "p2", "p3"]
@@ -36,6 +39,7 @@ class TicketGroundTruth(BaseModel):
 
 class CurrentTicketModel(BaseModel):
     """Current ticket being focused on."""
+
     ticket_id: str
     title: str
     description: str
@@ -52,6 +56,7 @@ class CurrentTicketModel(BaseModel):
 
 class QueueStatsModel(BaseModel):
     """Statistics about the ticket queue."""
+
     remaining_count: int
     urgent_count: int
     sla_at_risk_count: int
@@ -59,6 +64,7 @@ class QueueStatsModel(BaseModel):
 
 class ObservationModel(BaseModel):
     """Observation returned by the environment."""
+
     current_ticket: Optional[CurrentTicketModel] = None
     queue_stats: QueueStatsModel
     last_action_result: Optional[str] = None
@@ -71,6 +77,7 @@ class ObservationModel(BaseModel):
 
 class ClassifyAction(BaseModel):
     """Classify ticket with severity, priority, and component."""
+
     severity: Literal["sev0", "sev1", "sev2", "sev3"]
     priority: Literal["p0", "p1", "p2", "p3"]
     component: str
@@ -78,41 +85,49 @@ class ClassifyAction(BaseModel):
 
 class AssignAction(BaseModel):
     """Assign ticket to a team."""
+
     team: str
 
 
 class MarkDuplicateAction(BaseModel):
     """Mark ticket as duplicate of another."""
+
     canonical_ticket_id: str
 
 
 class RequestInfoAction(BaseModel):
     """Request more information from reporter."""
+
     info_type: Literal["repro_steps", "logs", "both"]
 
 
 class DeferAction(BaseModel):
     """Defer ticket to backlog."""
+
     reason: str
 
 
 class CloseAction(BaseModel):
     """Close ticket with reason."""
+
     reason: Literal["invalid", "wont_fix", "cannot_reproduce", "resolved"]
 
 
 class EscalateAction(BaseModel):
     """Escalate ticket as urgent incident."""
+
     justification: str
 
 
 class NextTicketAction(BaseModel):
     """Move to next ticket."""
+
     pass
 
 
 class ActionModel(BaseModel):
     """Action that can be taken in the environment."""
+
     action_type: Literal[
         "classify",
         "assign",
@@ -121,7 +136,7 @@ class ActionModel(BaseModel):
         "defer",
         "close",
         "escalate_incident",
-        "next_ticket"
+        "next_ticket",
     ]
     classify: Optional[ClassifyAction] = None
     assign: Optional[AssignAction] = None
@@ -163,6 +178,7 @@ class ActionModel(BaseModel):
 
 class RewardModel(BaseModel):
     """Reward information for a step."""
+
     step_reward: float = Field(..., ge=0.0, le=1.0)
     cumulative_reward: float
     reward_breakdown: dict[str, float] = Field(default_factory=dict)
@@ -170,6 +186,7 @@ class RewardModel(BaseModel):
 
 class TicketStateModel(BaseModel):
     """State of a single ticket in the triage process."""
+
     ticket_id: str
     triaged: bool
     actions_taken: list[str]
@@ -177,6 +194,7 @@ class TicketStateModel(BaseModel):
 
 class StateModel(BaseModel):
     """Full state of the environment."""
+
     current_task_id: str
     current_ticket_index: int
     total_tickets: int
