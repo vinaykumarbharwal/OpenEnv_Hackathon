@@ -1,6 +1,6 @@
-# tests/ — pytest test suite for Bug Triage OpenEnv
+# `tests/`
 
-Run from the repo root:
+Run the test suite from the repo root:
 
 ```bash
 pytest tests/ -v

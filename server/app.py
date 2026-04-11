@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import threading
+from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
@@ -16,14 +17,8 @@ from pydantic import BaseModel
 
 from models import ActionModel
 from server.environment import BugTriageEnv
-from server.heuristics import (
-    COMPONENT_TEAM_MAP,
-    infer_component,
-    infer_priority,
-    infer_severity,
-    needs_more_info,
-    suggested_info_type,
-)
+from server.graders import BugTriageGrader
+from server.policy import recommend_action
 from server.tasks import list_tasks
 
 
@@ -54,92 +49,61 @@ if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
-FALLBACK_BASELINE = {
-    "model": "offline-heuristic",
-    "offline_mode": True,
-    "mean_score": 0.7698,
-    "results": [
-        {"task_id": "bug_triage_easy", "score": 0.9920, "passed": True},
-        {"task_id": "bug_triage_medium", "score": 0.6715, "passed": False},
-        {"task_id": "bug_triage_hard", "score": 0.6460, "passed": False},
-    ],
-}
-
 def _as_bool(value: str | None) -> bool:
     if value is None:
         return False
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+@lru_cache(maxsize=1)
+def _offline_baseline_snapshot(seed: int = 42) -> dict:
+    """Run the built-in offline policy against every task and cache the snapshot."""
+    task_ids = list(list_tasks().keys())
+    results: list[dict[str, object]] = []
+    total_score = 0.0
+
+    for task_id in task_ids:
+        runner = BugTriageEnv()
+        observation = runner.reset(task_id=task_id, seed=seed)
+        done = False
+        info: dict = {"metrics": {}}
+
+        while not done:
+            history: list[str] = []
+            if runner.current_task is not None and runner.current_ticket_index < len(runner.ticket_states):
+                history = list(runner.ticket_states[runner.current_ticket_index]["actions_taken"])
+
+            action, _ = suggest_action(observation=observation, action_history=history)
+            observation, _, done, info = runner.step(action)
+
+        grader = BugTriageGrader(task_id=task_id)
+        grader_result = grader.grade_episode(
+            episode_actions=[],
+            ground_truths=[gt.model_dump(mode="json") for gt in runner.current_task.ground_truths],
+            metrics=info.get("metrics", {}),
+        )
+        total_score += grader_result.score
+        results.append(
+            {
+                "task_id": task_id,
+                "score": round(grader_result.score, 4),
+                "passed": grader_result.passed,
+            }
+        )
+
+    mean_score = total_score / len(results) if results else 0.0
+    return {
+        "model": "offline-heuristic",
+        "offline_mode": True,
+        "seed": seed,
+        "mean_score": round(mean_score, 4),
+        "results": results,
+    }
+
+
 def suggest_action(observation, action_history: list[str] | None = None) -> tuple[ActionModel, str]:
     """Return a deterministic next-step suggestion for the active ticket."""
-    ticket = observation.current_ticket
-    history = set(action_history or [])
-
-    if ticket is None:
-        return (
-            ActionModel(action_type="next_ticket", next_ticket={}),
-            "No active ticket is loaded, so the safest action is next_ticket.",
-        )
-
-    duplicate_id = (ticket.suspected_duplicate_ids or [None])[0]
-    component = infer_component(ticket, observation.available_components)
-    severity = infer_severity(ticket, component)
-    priority = infer_priority(ticket, severity)
-
-    if duplicate_id and "mark_duplicate" not in history:
-        return (
-            ActionModel(
-                action_type="mark_duplicate",
-                mark_duplicate={"canonical_ticket_id": str(duplicate_id)},
-            ),
-            f"Duplicate hints point to {duplicate_id}, so linking it is the most efficient next step.",
-        )
-
-    if "classify" not in history:
-        return (
-            ActionModel(
-                action_type="classify",
-                classify={
-                    "severity": severity,
-                    "priority": priority,
-                    "component": component,
-                },
-            ),
-            "Classification is still missing, so the suggestion fills severity, priority, and component first.",
-        )
-
-    if "assign" not in history:
-        default_team = observation.available_teams[0] if observation.available_teams else "backend-api"
-        team = COMPONENT_TEAM_MAP.get(component, default_team)
-        return (
-            ActionModel(action_type="assign", assign={"team": team}),
-            f"The inferred component maps best to {team}, so routing is the next step.",
-        )
-
-    if severity in {"sev0", "sev1"} and "escalate_incident" not in history:
-        return (
-            ActionModel(
-                action_type="escalate_incident",
-                escalate_incident={"justification": "High-impact production risk detected"},
-            ),
-            "This looks like a critical ticket, so escalation is recommended before moving on.",
-        )
-
-    if needs_more_info(ticket) and "request_info" not in history:
-        info_type = suggested_info_type(ticket)
-        return (
-            ActionModel(
-                action_type="request_info",
-                request_info={"info_type": info_type},
-            ),
-            "The ticket is still missing supporting evidence, so requesting more information is recommended.",
-        )
-
-    return (
-        ActionModel(action_type="next_ticket", next_ticket={}),
-        "The key triage steps for this ticket are already covered, so moving to the next ticket is reasonable.",
-    )
+    return recommend_action(observation=observation, action_history=action_history)
 
 
 class ResetRequest(BaseModel):
@@ -155,12 +119,6 @@ def _app_base_path(request: Request) -> str:
     """Return proxy-aware base path without a trailing slash."""
     root_path = (request.scope.get("root_path") or "").rstrip("/")
     return root_path
-
-
-def _as_bool(value: str | None) -> bool:
-    if value is None:
-        return False
-    return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
 @app.get("/")
@@ -215,7 +173,7 @@ def tasks() -> dict:
 
 @app.get("/baseline")
 def baseline() -> dict:
-    return FALLBACK_BASELINE
+    return _offline_baseline_snapshot()
 
 
 @app.get("/suggest_action")

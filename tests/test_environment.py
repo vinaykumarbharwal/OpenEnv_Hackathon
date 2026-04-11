@@ -106,6 +106,26 @@ class TestClassifyAction:
         assert info.get("validation_error") is not None
 
 
+class TestTriageSemantics:
+    def test_mark_duplicate_marks_ticket_triaged(self, easy_env):
+        easy_env.current_ticket_index = 3  # BUG-1004 duplicate of BUG-1001
+        action = ActionModel(
+            action_type="mark_duplicate",
+            mark_duplicate={"canonical_ticket_id": "BUG-1001"},
+        )
+        easy_env.step(action)
+        assert easy_env.ticket_states[3]["triaged"] is True
+
+    def test_request_info_marks_ticket_triaged(self, easy_env):
+        easy_env.current_ticket_index = 2  # BUG-1003 needs more info
+        action = ActionModel(
+            action_type="request_info",
+            request_info={"info_type": "logs"},
+        )
+        easy_env.step(action)
+        assert easy_env.ticket_states[2]["triaged"] is True
+
+
 # ---------------------------------------------------------------------------
 # Episode done conditions
 # ---------------------------------------------------------------------------
@@ -160,3 +180,25 @@ class TestPartialScore:
         easy_env.step(action)
         score = easy_env._calculate_partial_score()
         assert 0.0 <= score <= 1.0
+
+
+class TestTerminalRewards:
+    def test_terminal_bonus_helper_returns_bonus_when_all_critical_are_triaged(self, easy_env):
+        for index, ticket in enumerate(easy_env.current_task.tickets):
+            ground_truth = easy_env.current_task.get_ground_truth(ticket.ticket_id)
+            if ground_truth.true_severity in {"sev0", "sev1"}:
+                easy_env.ticket_states[index]["triaged"] = True
+
+        adjustment, breakdown = easy_env._terminal_step_adjustment()
+        assert adjustment == easy_env.reward_calculator.ALL_CRITICAL_TRIAGED
+        assert breakdown["all_critical_triaged_bonus"] == easy_env.reward_calculator.ALL_CRITICAL_TRIAGED
+
+    def test_terminal_penalty_helper_returns_penalty_when_budget_ends_with_critical_remaining(self, easy_env):
+        easy_env.steps_used = easy_env.current_task.step_budget
+
+        adjustment, breakdown = easy_env._terminal_step_adjustment()
+        assert adjustment == -easy_env.reward_calculator.BUDGET_EXHAUSTED_CRITICAL_REMAINING
+        assert (
+            breakdown["budget_exhausted_critical_remaining_penalty"]
+            == -easy_env.reward_calculator.BUDGET_EXHAUSTED_CRITICAL_REMAINING
+        )
