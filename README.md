@@ -10,11 +10,11 @@ tags:
 
 # Bug Triage OpenEnv
 
-A simple OpenEnv environment for real-world software bug triage. The agent must classify tickets, assign them to the right team, detect duplicates, request missing information, and escalate urgent incidents.
+A typed OpenEnv environment for software bug triage. The agent must classify tickets, assign them to the right team, detect duplicates, request missing information, and escalate urgent incidents.
 
 ## Why this environment
 
-This is a real workflow, not a toy task. Software teams do bug triage every day, and progress can be measured step by step.
+This is a real workflow, not a toy task. Software teams do bug triage every day, and progress can be measured step by step. The medium and hard tasks use varied, natural-language tickets instead of repeating a single template.
 
 The environment includes:
 
@@ -171,16 +171,11 @@ $env:OPENENV_OFFLINE = "1"
 venv\Scripts\python.exe inference.py
 ```
 
-Current offline baseline scores:
+Offline baseline snapshots are computed from the current shared policy and task fixtures.
+Use either of these to inspect live scores instead of relying on stale hardcoded numbers:
 
-| Task | Score |
-| --- | ---: |
-| `bug_triage_easy` | `0.9920` |
-| `bug_triage_medium` | `0.6715` |
-| `bug_triage_hard` | `0.6460` |
-| Mean | `0.7698` |
-
-Scores are printed to stdout by `inference.py`.
+- `python inference.py` with `OPENENV_OFFLINE=1`
+- `GET /baseline`
 
 Submission check note:
 

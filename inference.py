@@ -34,13 +34,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from models import ActionModel
 from server.environment import BugTriageEnv
 from server.graders import BugTriageGrader
-from server.heuristics import (
-    COMPONENT_TEAM_MAP,
-    infer_component,
-    infer_priority,
-    infer_severity,
-    needs_more_info,
-)
+from server.policy import recommend_action
 
 
 def _load_simple_env_file(dotenv_path: Path) -> None:
@@ -161,69 +155,9 @@ def _fallback_action(observation, plans: dict[str, dict]) -> ActionModel:
     if ticket is None:
         return ActionModel(action_type="next_ticket", next_ticket={})
 
-    ticket_id = ticket.ticket_id
-    plan = plans.setdefault(ticket_id, {"phase": 0})
-    phase = int(plan.get("phase", 0))
-
-    if phase == 0:
-        component = infer_component(ticket, observation.available_components)
-        severity = infer_severity(ticket, component)
-        priority = infer_priority(ticket, severity)
-        duplicate_id = (ticket.suspected_duplicate_ids or [None])[0]
-        plan["phase"] = 1
-        plan["severity"] = severity
-        plan["component"] = component
-        plan["duplicate_id"] = duplicate_id
-        plan["needs_more_info"] = needs_more_info(ticket)
-        return ActionModel(
-            action_type="classify",
-            classify={
-                "severity": severity,
-                "priority": priority,
-                "component": component,
-            },
-        )
-
-    if phase == 1:
-        component = str(plan.get("component") or infer_component(ticket, observation.available_components))
-        default_team = observation.available_teams[0] if observation.available_teams else "backend-api"
-        team = COMPONENT_TEAM_MAP.get(component, default_team)
-        plan["phase"] = 2
-        return ActionModel(action_type="assign", assign={"team": team})
-
-    if phase == 2:
-        sev = str(plan.get("severity", "sev2"))
-        duplicate_id = plan.get("duplicate_id")
-        if duplicate_id:
-            plan["phase"] = 3
-            return ActionModel(
-                action_type="mark_duplicate",
-                mark_duplicate={"canonical_ticket_id": str(duplicate_id)},
-            )
-
-        if sev in {"sev0", "sev1"}:
-            plan["phase"] = 3
-            return ActionModel(
-                action_type="escalate_incident",
-                escalate_incident={"justification": "High-impact production risk detected"},
-            )
-
-        if bool(plan.get("needs_more_info")):
-            plan["phase"] = 3
-            info_type = "both"
-            if ticket.repro_steps_present and not ticket.logs_present:
-                info_type = "logs"
-            elif ticket.logs_present and not ticket.repro_steps_present:
-                info_type = "repro_steps"
-            return ActionModel(
-                action_type="request_info",
-                request_info={"info_type": info_type},
-            )
-
-        plan["phase"] = 3
-        return ActionModel(action_type="next_ticket", next_ticket={})
-
-    return ActionModel(action_type="next_ticket", next_ticket={})
+    history = plans.setdefault(ticket.ticket_id, {}).setdefault("history", [])
+    action, _ = recommend_action(observation=observation, action_history=list(history))
+    return action
 
 
 def _guard_action(
@@ -244,6 +178,18 @@ def _guard_action(
         return ActionModel(action_type="next_ticket", next_ticket={})
 
     if action.action_type == "request_info" and "request_info" in history:
+        return ActionModel(action_type="next_ticket", next_ticket={})
+
+    if action.action_type == "classify" and "classify" in history:
+        return ActionModel(action_type="next_ticket", next_ticket={})
+
+    if action.action_type == "assign" and "assign" in history:
+        return ActionModel(action_type="next_ticket", next_ticket={})
+
+    if action.action_type == "mark_duplicate" and "mark_duplicate" in history:
+        return ActionModel(action_type="next_ticket", next_ticket={})
+
+    if action.action_type == "escalate_incident" and "escalate_incident" in history:
         return ActionModel(action_type="next_ticket", next_ticket={})
 
     if len(history) >= 2 and history[-1] == history[-2] == action.action_type and action.action_type != "next_ticket":
@@ -453,6 +399,7 @@ def _run_task(task_id: str, env: BugTriageEnv, client: OpenAI | None) -> None:
                 if current_ticket_id:
                     action_history_by_ticket[current_ticket_id].append(action.action_type)
                     steps_by_ticket[current_ticket_id] += 1
+                    plans.setdefault(current_ticket_id, {}).setdefault("history", []).append(action.action_type)
             except Exception as exc:
                 err_value = _sanitize(str(exc))
                 _emit(
@@ -481,7 +428,7 @@ def _run_task(task_id: str, env: BugTriageEnv, client: OpenAI | None) -> None:
                 file=sys.stderr,
                 flush=True,
             )
-            success = bool(done)
+            success = False
             parsed_rewards: list[float] = []
             for reward_text in rewards:
                 try:

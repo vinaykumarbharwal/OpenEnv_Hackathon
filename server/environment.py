@@ -238,7 +238,11 @@ class BugTriageEnv:
 
         self._check_done()
         if self.episode_done:
-            self._apply_terminal_reward(action, ground_truth, current_ticket.ticket_id)
+            terminal_adjustment, terminal_breakdown = self._terminal_step_adjustment()
+            if terminal_adjustment:
+                step_reward = self.reward_calculator._clamp_reward(step_reward + terminal_adjustment)
+                self.cumulative_reward = max(0.0, self.cumulative_reward + terminal_adjustment)
+                breakdown.update(terminal_breakdown)
 
         reward_model = RewardModel(
             step_reward=step_reward,
@@ -466,18 +470,23 @@ class BugTriageEnv:
             return f"Assigned to team: {action.assign.team}"
 
         if action.action_type == "mark_duplicate" and action.mark_duplicate:
+            self.ticket_states[self.current_ticket_index]["triaged"] = True
             return f"Marked as duplicate of {action.mark_duplicate.canonical_ticket_id}"
 
         if action.action_type == "request_info" and action.request_info:
+            self.ticket_states[self.current_ticket_index]["triaged"] = True
             return f"Requested {action.request_info.info_type}"
 
         if action.action_type == "defer" and action.defer:
+            self.ticket_states[self.current_ticket_index]["triaged"] = True
             return f"Deferred: {action.defer.reason}"
 
         if action.action_type == "close" and action.close:
+            self.ticket_states[self.current_ticket_index]["triaged"] = True
             return f"Closed: {action.close.reason}"
 
         if action.action_type == "escalate_incident":
+            self.ticket_states[self.current_ticket_index]["triaged"] = True
             return "Escalated incident"
 
         return f"Action executed for {ticket_id}"
@@ -560,40 +569,23 @@ class BugTriageEnv:
         if self.current_ticket_index >= len(self.current_task.tickets):
             self.episode_done = True
 
-    def _apply_terminal_reward(self, action: ActionModel, ground_truth, ticket_id: str) -> None:
+    def _terminal_step_adjustment(self) -> tuple[float, dict[str, float]]:
         if self.current_task is None:
-            return
+            return 0.0, {}
 
         all_critical_triaged = self._all_critical_triaged()
         budget_exhausted = self.steps_used >= self.current_task.step_budget
         critical_remaining = self._has_critical_remaining()
 
         if all_critical_triaged:
-            terminal_reward, _ = self.reward_calculator.calculate_step_reward(
-                action=action,
-                ground_truth=ground_truth,
-                ticket_id=ticket_id,
-                is_valid=True,
-                is_critical_ticket=False,
-                is_terminal=True,
-                all_critical_triaged=True,
-                budget_exhausted_with_critical=False,
-            )
-            self.cumulative_reward += terminal_reward
-            return
+            bonus = self.reward_calculator.ALL_CRITICAL_TRIAGED
+            return bonus, {"all_critical_triaged_bonus": bonus}
 
         if budget_exhausted and critical_remaining:
-            terminal_reward, _ = self.reward_calculator.calculate_step_reward(
-                action=action,
-                ground_truth=ground_truth,
-                ticket_id=ticket_id,
-                is_valid=True,
-                is_critical_ticket=False,
-                is_terminal=True,
-                all_critical_triaged=False,
-                budget_exhausted_with_critical=True,
-            )
-            self.cumulative_reward += terminal_reward
+            penalty = -self.reward_calculator.BUDGET_EXHAUSTED_CRITICAL_REMAINING
+            return penalty, {"budget_exhausted_critical_remaining_penalty": penalty}
+
+        return 0.0, {}
 
     def _all_critical_triaged(self) -> bool:
         if self.current_task is None:
